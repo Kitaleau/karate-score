@@ -285,7 +285,8 @@ function viewScore(){
     if(x==='M') return `<div class="mat" aria-hidden="true"><i></i></div>`;
     if(x==='R') return `<div class="mid"><button class="pill" data-a="reset" id="resetBtn">リセット</button></div>`;
     if(x==='B') return `<div></div>`;
-    const v=p.s[x], dm=c&&c.minIdx===x, dx=c&&c.maxIdx===x;
+    // 同じ点が並んだときは、その全員に印を付ける（全員が同じ点なら印なし）
+    const v=p.s[x], spread=c&&c.mn!==c.mx, dm=spread&&v===c.mn, dx=spread&&v===c.mx;
     return `<div class="judge ${dm?'dmin':''} ${dx?'dmax':''}">
       <button class="jscore ${v==null?'empty':''}" data-a="pad" data-j="${x}" aria-label="${J_NAMES[x]}の点${dm?'（最低点）':dx?'（最高点）':''}">${v==null?(x===0?'主審':'副審'):f(v)}</button>
       <div class="pm"><button class="minus" data-a="adj" data-j="${x}" data-d="-1" aria-label="${J_NAMES[x]} 0.1下げる">-</button><button class="plus" data-a="adj" data-j="${x}" data-d="1" aria-label="${J_NAMES[x]} 0.1上げる">+</button></div></div>`;
