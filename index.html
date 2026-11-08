@@ -123,6 +123,7 @@ tr.todo td{color:var(--muted)}
 .plist{display:flex;flex-direction:column;gap:4px}
 .prow{display:grid;grid-template-columns:3.2em 1.3fr 1fr auto auto auto;gap:4px;align-items:center}
 .prow input{padding:6px 8px;min-width:0}
+@media (max-width:520px){.prow{grid-template-columns:2.6em 1fr 1fr 28px 28px 28px;gap:3px}.prow input{padding:6px 4px;font-size:15px}.prow button{min-width:28px;padding:0}}
 .prow button{height:36px;min-width:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
 textarea{width:100%;min-height:110px;resize:vertical}
 h2{font-size:1rem;margin:0}
