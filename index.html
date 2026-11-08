@@ -13,20 +13,17 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
 <style>
-/* 配置：上に画面の切り替え、採点は中央に試合場（審判が周りを囲む）、下に得点 */
+/* 元のアプリ（空手道競技ツール）の見た目にそろえる：白地、黄土色の試合場、灰色の点の枠、白い−と赤い＋ */
 :root{
   color-scheme:light;
-  --bg:#eef0ee; --surface:#ffffff; --ink:#1b1e21; --muted:#5b636a; --line:#d3d7d4;
-  --mat:#e8c48f; --mat-edge:#fff7ea; --red:#c4291f; --on-red:#ffffff; --blue:#1f5cb8;
-  --drop:#8e969c; --good:#1d7444; --warn:#9a5600; --warn-bg:#ffe2b8; --end-bg:#ffd0cc; --soft:#f6f7f6;
-  --font:"Hiragino Kaku Gothic ProN","Hiragino Sans","BIZ UDPGothic","Yu Gothic","Meiryo",sans-serif;
-  --num:"SF Mono","Menlo","BIZ UDGothic","Consolas",monospace;
-  --display:"Hiragino Mincho ProN","Yu Mincho","BIZ UDPMincho",serif;
+  --bg:#ffffff; --surface:#ffffff; --ink:#111111; --muted:#666666; --line:#cccccc;
+  --mat:#efc68c; --box:#d3d3d3; --box-edge:#b4b4b4; --red:#ff2a00; --on-red:#ffffff; --blue:#1414ff; --link:#1a7cff;
+  --hi:#c9b6f3; --hi-ink:#a98bdf; --lo:#8fe5ab; --lo-ink:#45c46f; --score:#e8231a;
+  --drop:#8e969c; --good:#1d7444; --warn:#9a5600; --warn-bg:#fff3c4; --end-bg:#ffe0dc; --soft:#f2f2f2;
+  --font:"Hiragino Sans","Hiragino Kaku Gothic ProN","BIZ UDPGothic","Yu Gothic","Meiryo",sans-serif;
+  --num:"Hiragino Sans","Helvetica Neue","Arial",sans-serif;
+  --display:"Hiragino Sans","Yu Gothic",sans-serif;
 }
-@media (prefers-color-scheme: dark){ :root{
-  --bg:#131517; --surface:#1d2023; --ink:#eceeef; --muted:#a2aab1; --line:#353a3f;
-  --mat:#5c4426; --mat-edge:#c9a46c; --red:#de463a; --on-red:#ffffff; --blue:#82b1ff;
-  --drop:#6b7379; --good:#5cc98a; --warn:#f0a94a; --warn-bg:#4a3310; --end-bg:#4f1712; --soft:#25292c; color-scheme:dark } }
 
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -45,9 +42,9 @@ h1{font-family:var(--display);font-size:1.3rem;margin:0;letter-spacing:.04em}
 .saved{font-size:.8rem;color:var(--muted)}
 .saved.bad{color:var(--warn);font-weight:700}
 
-.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:4px}
-.tabs button{padding:10px 2px;border:1px solid var(--line);background:var(--surface);border-radius:8px;font-weight:700;font-size:.82rem;white-space:nowrap}
-.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.tabs button{padding:10px 2px;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--link);font-size:.85rem;white-space:nowrap}
+.tabs button[aria-pressed="true"]{border-bottom-color:var(--link);color:var(--ink);font-weight:700}
 
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -66,38 +63,46 @@ select.grow,input.grow{flex:1}
 .btn.danger{color:var(--red)}
 .btn.armed{background:var(--red);color:var(--on-red);border-color:var(--red)}
 
-.pnav{display:grid;grid-template-columns:48px 1fr 48px;gap:8px}
-.pnav button{height:48px;border-radius:8px;border:1px solid var(--line);background:var(--soft);font-size:1.5rem;font-weight:700;color:var(--blue)}
-.pnav select{height:48px;font-weight:700}
-.pinfo{display:grid;grid-template-columns:5.5em 1fr 1fr;gap:6px}
-.pinfo .memo{grid-column:1 / -1}
+/* 採点画面（元のアプリの並び） */
+.sc{display:flex;flex-direction:column;gap:10px;max-width:440px;width:100%;margin:0 auto}
+.sc-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sc-top select{max-width:46%;font-size:.85rem;padding:6px 8px;border-radius:0;background:var(--surface)}
+.sc-top .memo{flex:1;max-width:54%;border:1px solid var(--line);border-radius:0;background:var(--surface);text-align:right;padding:6px 8px}
+.sc-set{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.gbox{background:#e3e3e3;border:1px solid #d0d0d0;border-radius:0;color:var(--link);font-size:1.35rem;padding:4px 12px;line-height:1.3}
+.sc-set .bl{display:flex;align-items:center;gap:6px;font-size:1.35rem}
+.pnav{display:flex;justify-content:flex-end;align-items:center;gap:6px}
+.pnav .arr{border:0;background:transparent;color:var(--blue);font-size:1.7rem;font-weight:900;padding:0 8px;line-height:1}
+.pnav select{background:#e8e8e8;border:0;border-radius:0;color:var(--link);font-size:1.05rem;padding:6px 8px;max-width:70%}
+.pinfo{display:grid;grid-template-columns:4.5em 1fr 1fr;gap:4px}
+.pinfo input{border-radius:0;padding:5px 7px;font-size:15px;background:var(--surface)}
 
-/* 試合場 */
-.court{background:var(--mat);border-radius:10px;padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.judge{display:flex;flex-direction:column;gap:4px;align-self:start}
-.jname{font-size:.78rem;font-weight:700;text-align:center;color:var(--ink);opacity:.8}
-.jscore{height:58px;border-radius:8px;border:2px solid transparent;background:var(--surface);font-family:var(--num);font-size:1.75rem;font-variant-numeric:tabular-nums}
-.jscore.empty{color:var(--muted);font-size:1rem;font-family:var(--font)}
-.judge.dmin .jscore,.judge.dmax .jscore{color:var(--drop);text-decoration:line-through;border-color:var(--drop);border-style:dashed}
-.tag{font-size:.7rem;text-align:center;min-height:1.1em;color:var(--ink);font-weight:700}
-.pm{display:grid;grid-template-columns:1fr 1fr;gap:4px}
-.pm button{height:44px;border-radius:8px;font-size:1.45rem;font-weight:700;border:1px solid var(--line)}
-.pm .minus{background:var(--surface);color:var(--blue)}
-.pm .plus{background:var(--red);color:var(--on-red);border-color:var(--red)}
-.mat{border:3px solid var(--mat-edge);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:128px;text-align:center;padding:4px;background:transparent;color:var(--ink)}
-.mat .k{font-size:.72rem;font-weight:700}
-.mat .v{font-family:var(--num);font-size:1.9rem;line-height:1}
-.mat .who{font-size:.75rem;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.court{background:var(--mat);padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px 16px}
+.judge{display:flex;flex-direction:column;gap:6px}
+.jscore{height:48px;border-radius:0;border:2px solid var(--box-edge);border-right-color:#e9e9e9;border-bottom-color:#e9e9e9;background:var(--box);font-family:var(--num);font-size:1.75rem;color:#222;font-variant-numeric:tabular-nums}
+.jscore.empty{font-size:1.4rem;font-family:var(--font)}
+.judge.dmax .jscore{background:var(--hi)}
+.judge.dmin .jscore{background:var(--lo)}
+.pm{display:flex;justify-content:space-between}
+.pm button{width:36px;height:46px;border-radius:0;font-size:1.4rem;border:1px solid #d6d6d6;line-height:1;padding:0}
+.pm .minus{background:#ffffff;color:var(--blue)}
+.pm .plus{background:var(--red);color:var(--blue);border-color:#f0f0f0}
+.mat{border:3px solid #ffffff;min-height:150px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:28px}
+.mat i{display:block;width:16px;height:9px;border-top:3px solid #fff;position:relative}
+.mat i::before{content:"";position:absolute;left:5px;top:-11px;width:3px;height:9px;background:#fff}
+.mid{display:flex;align-items:center;justify-content:center}
+.pill{border:1px solid #c8c8c8;background:#f3f3f3;border-radius:999px;font-size:.85rem;padding:3px 16px}
+.pill.armed{background:var(--red);color:#fff;border-color:var(--red)}
 
-.result{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.tile{border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center;background:var(--soft)}
-.tile .k{font-size:.78rem;color:var(--muted);font-weight:700}
-.tile .v{font-family:var(--num);font-size:1.7rem;line-height:1.2}
-.tile.main{border-color:var(--red)}
-.tile.main .k{color:var(--red)}
+.sums{display:grid;grid-template-columns:1fr 40px 1fr 1fr;gap:2px 6px;align-items:center;text-align:center}
+.sums .h{font-size:1.15rem}
+.sums .h.lo{color:var(--lo-ink)} .sums .h.hi{color:var(--hi-ink)} .sums .h b{color:var(--ink);font-weight:400}
+.sums .v{border:1px solid #d6d6d6;height:42px;display:flex;align-items:center;justify-content:center;font-family:var(--num);font-size:1.45rem;font-variant-numeric:tabular-nums}
+.sums .v.main{color:var(--score)}
+.loupe{border:0;background:transparent;padding:0;width:40px;height:42px;display:flex;align-items:center;justify-content:center}
 .status{font-size:.95rem;text-align:center}
 .status b{font-size:1.15rem}
-.next-big{height:56px;border-radius:10px;border:0;background:var(--blue);color:var(--surface);font-size:1.15rem;font-weight:700}
+.next-big{height:50px;border-radius:0;border:1px solid #c8c8c8;background:#e8e8e8;color:var(--link);font-size:1.1rem}
 
 /* 順位表 */
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:8px}
@@ -124,13 +129,15 @@ h2{font-size:1rem;margin:0}
 .example{font-size:.82rem;color:var(--warn);font-weight:700}
 
 /* タイマー */
-.tdisp{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:min(22vw,7.5rem);line-height:1.05;text-align:center;border-radius:12px;padding:14px 4px;background:var(--soft);border:2px solid var(--line)}
-.tdisp.warn{background:var(--warn-bg);border-color:var(--warn)}
-.tdisp.end{background:var(--end-bg);border-color:var(--red);color:var(--red)}
-.tbtns{display:grid;grid-template-columns:2fr 1fr;gap:8px}
-.tbtns button{height:64px;border-radius:12px;font-size:1.3rem;font-weight:700;border:1px solid var(--line);background:var(--soft)}
-.tbtns .go{background:var(--blue);color:var(--surface);border-color:var(--blue)}
-.tbtns .go.pause{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.tw{display:flex;flex-direction:column;gap:10px;max-width:440px;width:100%;margin:0 auto;align-items:stretch}
+.tdisp{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:min(21vw,6.5rem);line-height:1.1;text-align:center;padding:4px;background:var(--bg)}
+.tdisp.warn{background:var(--warn-bg)}
+.tdisp.end{background:var(--end-bg);color:var(--red)}
+.tadj{display:flex;justify-content:center;gap:10px}
+.tadj button{border:1px solid #c8c8c8;background:#e8e8e8;border-radius:0;font-size:.8rem;padding:4px 10px;min-width:56px}
+.tbtns{display:flex;justify-content:center;gap:14px}
+.tbtns button{min-width:120px;height:50px;border-radius:0;font-size:1.1rem;border:1px solid #c8c8c8;background:#e8e8e8;color:#333}
+.tbtns .go.pause{background:#d6d6d6}
 .tset{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
 
 /* 形カード */
@@ -264,38 +271,35 @@ function viewScore(){
   const d=div();
   if(!d) return `<div class="panel"><p>区分がまだありません。</p><button class="btn primary" data-a="view" data-v="setup">区分を作る</button></div>`;
   const p=player(d);
-  let h=`<div class="panel">
-    <div class="row"><span class="lbl">区分</span>${divSelect('divSel')}</div>
-    <div class="row" style="justify-content:space-between">
-      <div class="seg" role="group" aria-label="審判の人数">${[7,5,3].map(n=>`<button data-a="judges" data-n="${n}" aria-pressed="${d.judges===n}">${n}人</button>`).join('')}</div>
-      <div class="step"><span class="lbl">基準点</span><button data-a="base" data-d="-1" aria-label="基準点を下げる">−</button><b class="num">${f(d.base)}</b><button data-a="base" data-d="1" aria-label="基準点を上げる">＋</button></div>
-    </div></div>`;
-  if(!p) return h+`<div class="panel"><p>この区分には選手がいません。</p><div class="row"><button class="btn primary" data-a="addPlayer">選手を1人追加</button><button class="btn" data-a="view" data-v="setup">まとめて登録する</button></div></div>`;
+  let h=`<div class="sc"><div class="sc-top">${divSelect('divSel')}${p?`<input type="text" class="memo" id="pMemo" value="${esc(p.memo)}" placeholder="メモ" aria-label="メモ">`:''}</div>
+    <div class="sc-set"><button class="gbox" data-a="judges" aria-label="審判の人数を切り替える">${d.judges}人審判</button>
+      <span class="bl">基準点<button class="gbox" data-a="pad" data-j="base" aria-label="基準点を変える">${f(d.base)}</button></span></div>`;
+  if(!p) return h+`<p>この区分には選手がいません。</p><div class="row"><button class="btn primary" data-a="addPlayer">選手を1人追加</button><button class="btn" data-a="view" data-v="setup">まとめて登録する</button></div></div>`;
   const c=calc(p,d), idx=d.players.indexOf(p);
-  h+=`<div class="pnav"><button data-a="prev" aria-label="前の選手">‹</button>
-    <select id="pSel" aria-label="選手">${d.players.map((q,i)=>{const cc=calc(q,d);return `<option value="${i}" ${i===idx?'selected':''}>${i+1}番目　${esc(q.no)} ${esc(q.name)}${cc?'　'+f(cc.base):'　未'}</option>`}).join('')}</select>
-    <button data-a="next" aria-label="次の選手">›</button></div>
-  <div class="pinfo"><input type="text" id="pNo" value="${esc(p.no)}" placeholder="番号" aria-label="番号"><input type="text" id="pName" value="${esc(p.name)}" placeholder="氏名" aria-label="氏名"><input type="text" id="pTeam" value="${esc(p.team)}" placeholder="所属" aria-label="所属"><input type="text" class="memo" id="pMemo" value="${esc(p.memo)}" placeholder="メモ（形の名前など）" aria-label="メモ"></div>`;
-  const layout=d.judges===7?[1,0,2,3,'M',4,5,'B',6]:d.judges===5?[1,0,2,'B','M','B',3,'B',4]:[1,0,2,'B','M','B'];
+  h+=`<div class="pnav"><button class="arr" data-a="prev" aria-label="前の選手">&lt;</button>
+    <select id="pSel" aria-label="選手">${d.players.map((q,i)=>{const cc=calc(q,d);return `<option value="${i}" ${i===idx?'selected':''}>選手${i+1}${q.name?'　'+esc(q.name):''}${cc?'　'+f(cc.base):''}</option>`}).join('')}</select>
+    <button class="arr" data-a="next" aria-label="次の選手">&gt;</button></div>
+  <div class="pinfo"><input type="text" id="pNo" value="${esc(p.no)}" placeholder="番号" aria-label="番号"><input type="text" id="pName" value="${esc(p.name)}" placeholder="氏名" aria-label="氏名"><input type="text" id="pTeam" value="${esc(p.team)}" placeholder="所属" aria-label="所属"></div>`;
+  const layout=d.judges===7?[1,0,2,3,'M',4,5,'R',6]:d.judges===5?[1,0,2,'B','M','B',3,'R',4]:[1,0,2,'B','M','B','B','R','B'];
   h+=`<div class="court">`+layout.map(x=>{
-    if(x==='M') return `<button class="mat" data-a="big" aria-label="得点を大きく表示"><span class="k">得点</span><span class="v">${c?f(c.base):'—'}</span><span class="who">${esc(p.name)}</span><span class="k">押すと拡大</span></button>`;
+    if(x==='M') return `<div class="mat" aria-hidden="true"><i></i></div>`;
+    if(x==='R') return `<div class="mid"><button class="pill" data-a="reset" id="resetBtn">リセット</button></div>`;
     if(x==='B') return `<div></div>`;
     const v=p.s[x], dm=c&&c.minIdx===x, dx=c&&c.maxIdx===x;
-    return `<div class="judge ${dm?'dmin':''} ${dx?'dmax':''}"><div class="jname">${J_NAMES[x]}</div>
-      <button class="jscore ${v==null?'empty':''}" data-a="pad" data-j="${x}" aria-label="${J_NAMES[x]}の点を入力">${v==null?'押して入力':f(v)}</button>
-      <div class="pm"><button class="minus" data-a="adj" data-j="${x}" data-d="-1" aria-label="${J_NAMES[x]} 0.1下げる">−</button><button class="plus" data-a="adj" data-j="${x}" data-d="1" aria-label="${J_NAMES[x]} 0.1上げる">＋</button></div>
-      <div class="tag">${dm?'最低点（除外）':dx?'最高点（除外）':''}</div></div>`;
+    return `<div class="judge ${dm?'dmin':''} ${dx?'dmax':''}">
+      <button class="jscore ${v==null?'empty':''}" data-a="pad" data-j="${x}" aria-label="${J_NAMES[x]}の点${dm?'（最低点）':dx?'（最高点）':''}">${v==null?(x===0?'主審':'副審'):f(v)}</button>
+      <div class="pm"><button class="minus" data-a="adj" data-j="${x}" data-d="-1" aria-label="${J_NAMES[x]} 0.1下げる">-</button><button class="plus" data-a="adj" data-j="${x}" data-d="1" aria-label="${J_NAMES[x]} 0.1上げる">+</button></div></div>`;
   }).join('')+`</div>
-  <div class="row"><button class="btn" data-a="fill">未入力を基準点で埋める</button><button class="btn danger" data-a="reset" id="resetBtn">この選手の点を消す</button></div>`;
+  <div class="sums">
+    <div class="h">得点</div><div></div><div class="h lo"><b>+</b>最低点</div><div class="h hi"><b>+</b>最高点</div>
+    <div class="v main">${c?f(c.base):''}</div>
+    <button class="loupe" data-a="big" aria-label="得点を拡大表示"><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="#cfe6ff" stroke="#3a6fb0" stroke-width="3"/><line x1="20" y1="20" x2="29" y2="29" stroke="#333" stroke-width="5" stroke-linecap="round"/></svg></button>
+    <div class="v">${c?f(c.plusMin):''}</div><div class="v">${c?f(c.plusMax):''}</div></div>`;
   const filled=p.s.slice(0,d.judges).filter(v=>v!=null).length;
-  h+=`<div class="result">
-    <div class="tile main"><div class="k">得点</div><div class="v">${c?f(c.base):'—'}</div></div>
-    <div class="tile"><div class="k">＋最低点</div><div class="v">${c?f(c.plusMin):'—'}</div></div>
-    <div class="tile"><div class="k">＋最高点</div><div class="v">${c?f(c.plusMax):'—'}</div></div></div>`;
   if(c){ const rk=ranked(d), r=rk.done.find(x=>x.p===p);
     h+=`<div class="status">この区分で <b class="num">${r.rank}位</b>（採点済み ${rk.done.length}人中）${r.note?`<span class="chip w">${r.note}</span>`:''}</div>`;
-  } else h+=`<div class="status">あと <b class="num">${d.judges-filled}人</b> の点を入れると得点が出ます</div>`;
-  h+=`<button class="next-big" data-a="nextOrAdd">${idx<d.players.length-1?'次の選手へ ›':'選手を追加して次へ ›'}</button>`;
+  } else h+=`<div class="status">あと <b class="num">${d.judges-filled}人</b> の点を入れると得点が出ます　<button class="pill" data-a="fill">残りを基準点に</button></div>`;
+  h+=`<button class="next-big" data-a="nextOrAdd">${idx<d.players.length-1?'次の選手へ ＞':'選手を追加して次へ ＞'}</button></div>`;
   return h;
 }
 function viewRank(){
@@ -348,7 +352,7 @@ function viewSetup(){
 
 /* 組手タイマー */
 const T={left:S.timer.dur,running:false,last:0,warned:false,ended:false};
-const fmtT=ms=>{ const t=Math.ceil(Math.max(0,ms)/100), m=Math.floor(t/600), s=(t%600)/10; return m+':'+s.toFixed(1).padStart(4,'0'); };
+const fmtT=ms=>{ const t=Math.ceil(Math.max(0,ms)/100), m=Math.floor(t/600), s=Math.floor((t%600)/10), d=t%10; return m+"'"+String(s).padStart(2,'0')+'"'+d; };
 const fmtS=ms=>{ const s=Math.round(ms/1000); return Math.floor(s/60)+'分'+String(s%60).padStart(2,'0')+'秒'; };
 let AC=null;
 function ensureAudio(){ try{ AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume(); }catch(e){} }
@@ -360,16 +364,18 @@ function beep(freq,dur,times,gap){
 }
 function viewTimer(){
   const t=S.timer;
-  return `<div class="panel">
+  const adj=sign=>`<div class="tadj">${[[60000,'1M'],[10000,'10S'],[1000,'1S']].map(([ms,l])=>`<button data-a="tAdj" data-d="${sign*ms}" aria-label="${l}${sign>0?'増やす':'減らす'}">${sign>0?'+':'-'}${l}</button>`).join('')}</div>`;
+  return `<div class="tw">
+    <div class="row" style="justify-content:flex-end"><span>あとしばらく</span><div class="step"><button data-a="tWarn" data-d="-5000" aria-label="予鈴を5秒早く">−</button><b class="gbox num" style="font-size:1.1rem">${t.warn>0?Math.round(t.warn/1000):'なし'}</b><button data-a="tWarn" data-d="5000" aria-label="予鈴を5秒遅く">＋</button></div><span>秒</span></div>
+    ${adj(1)}
     <div id="tDisp" class="tdisp">${fmtT(T.left)}</div>
+    ${adj(-1)}
     <div id="tState" class="status"></div>
-    <div class="tbtns"><button class="go" data-a="tStart" id="tStartBtn">開始</button><button data-a="tReset" id="tResetBtn">リセット</button></div>
-    <div class="row" style="justify-content:center"><span class="lbl">止めて時間を直す</span><button class="btn" data-a="tAdj" data-d="-1000">−1秒</button><button class="btn" data-a="tAdj" data-d="1000">＋1秒</button></div>
+    <div class="tbtns"><button class="go" data-a="tStart" id="tStartBtn">START</button><button data-a="tReset" id="tResetBtn">RESET</button></div>
   </div>
   <div class="panel">
-    <div class="tset"><span>試合時間</span><div class="step"><button data-a="tDur" data-d="-10000" aria-label="試合時間を10秒短く">−</button><b class="num" style="min-width:6ch">${fmtS(t.dur)}</b><button data-a="tDur" data-d="10000" aria-label="試合時間を10秒長く">＋</button></div></div>
-    <div class="tset"><span>予鈴（残り時間）</span><div class="step"><button data-a="tWarn" data-d="-5000" aria-label="予鈴を5秒早く">−</button><b class="num" style="min-width:6ch">${t.warn>0?fmtS(t.warn):'鳴らさない'}</b><button data-a="tWarn" data-d="5000" aria-label="予鈴を5秒遅く">＋</button></div></div>
-    <div class="note">試合時間は10秒きざみ、予鈴は5秒きざみで変えられます。予鈴で短い音が2回、終了で長い音が1回鳴ります。iPhoneは、消音（マナー）スイッチが入っていると音が出ないことがあります。</div>
+    <div class="tset"><span>試合時間（RESETで戻る時間）</span><div class="step"><button data-a="tDur" data-d="-10000" aria-label="試合時間を10秒短く">−</button><b class="num" style="min-width:6ch">${fmtS(t.dur)}</b><button data-a="tDur" data-d="10000" aria-label="試合時間を10秒長く">＋</button></div></div>
+    <div class="note">「あとしばらく」は予鈴を鳴らす残り時間です（5秒きざみ）。予鈴で短い音が2回、終了で長い音が1回鳴ります。止めている間は、上下の＋−で残り時間を直せます。iPhoneは、消音（マナー）スイッチが入っていると音が出ないことがあります。</div>
   </div>`;
 }
 function drawTimer(){
@@ -377,7 +383,7 @@ function drawTimer(){
   el.textContent=fmtT(T.left);
   el.className='tdisp'+(T.ended?' end':(T.warned?' warn':''));
   const b=document.getElementById('tStartBtn');
-  b.textContent=T.ended?'終了':(T.running?'一時停止':(T.left<S.timer.dur?'再開':'開始'));
+  b.textContent=T.ended?'終了':(T.running?'STOP':'START');
   b.className='go'+(T.running?' pause':'');
   document.getElementById('tState').textContent=T.ended?'試合終了':(T.warned?'予鈴が鳴りました':(T.running?'計測中':''));
 }
@@ -467,17 +473,19 @@ function parsePad(b){
 }
 function openPad(j){ padJ=j; padBuf=''; drawPad(); PAD.hidden=false; }
 function drawPad(){
-  const d=div(), p=player(d), v=parsePad(padBuf), cur=p.s[padJ];
+  const d=div(), p=player(d), v=parsePad(padBuf), isBase=padJ==='base', cur=isBase?d.base:p.s[padJ];
+  const who=isBase?'基準点':J_NAMES[padJ]+'（'+esc(p.name)+'）';
   const shown=padBuf===''?(cur==null?'—':f(cur)):(Number.isNaN(v)?'0.0〜10.0で入れてください':f(v));
-  PAD.innerHTML=`<div class="pad-card" role="dialog" aria-label="${J_NAMES[padJ]}の点を入力">
-    <div class="pad-head"><b>${J_NAMES[padJ]}（${esc(p.name)}）</b><button class="btn" data-a="padClose">閉じる</button></div>
+  PAD.innerHTML=`<div class="pad-card" role="dialog" aria-label="${isBase?'基準点':J_NAMES[padJ]+'の点'}を入力">
+    <div class="pad-head"><b>${who}</b><button class="btn" data-a="padClose">閉じる</button></div>
     <div class="pad-val ${padBuf&&Number.isNaN(v)?'err':''}">${shown}</div>
     <div class="note">「85」と押すと 8.5、「7」だけなら 7.0 になります。</div>
     <div class="keys">${['1','2','3','4','5','6','7','8','9','.','0','消'].map(k=>`<button data-a="k" data-k="${k}">${k}</button>`).join('')}</div>
-    <button class="pad-ok" data-a="padOk">${padJ<d.judges-1?'決定して次の審判へ':'決定'}</button></div>`;
+    <button class="pad-ok" data-a="padOk">${!isBase&&padJ<d.judges-1?'決定して次の審判へ':'決定'}</button></div>`;
 }
 function padOk(){
   const d=div(), p=player(d), v=parsePad(padBuf);
+  if(padJ==='base'){ if(padBuf!==''){ if(Number.isNaN(v)){ drawPad(); return; } d.base=v; save(); } PAD.hidden=true; render(); return; }
   if(padBuf!==''){ if(Number.isNaN(v)){ drawPad(); return; } p.s[padJ]=v; save(); }
   if(padJ<d.judges-1){ padJ++; padBuf=''; render(); drawPad(); } else { PAD.hidden=true; render(); }
 }
@@ -494,7 +502,7 @@ document.addEventListener('click',e=>{
   const a=b.dataset.a, d=div(), p=player(d);
   switch(a){
     case 'view': S.view=b.dataset.v; break;
-    case 'judges': d.judges=+b.dataset.n; break;
+    case 'judges': d.judges=d.judges===7?5:d.judges===5?3:7; break;
     case 'base': d.base=Math.max(0,Math.min(100,d.base+ +b.dataset.d)); break;
     case 'prev': d.pi=Math.max(0,(d.pi||0)-1); break;
     case 'next': d.pi=Math.min(d.players.length-1,(d.pi||0)+1); break;
@@ -504,7 +512,7 @@ document.addEventListener('click',e=>{
       window.scrollTo({top:0}); break;
     case 'addPlayer': d.players.push(newP()); d.pi=d.players.length-1; break;
     case 'adj': { const j=+b.dataset.j, cur=p.s[j]==null?d.base:p.s[j]; p.s[j]=Math.max(0,Math.min(100,cur+ +b.dataset.d)); break; }
-    case 'pad': openPad(+b.dataset.j); return;
+    case 'pad': openPad(b.dataset.j==='base'?'base':+b.dataset.j); return;
     case 'padClose': PAD.hidden=true; render(); return;
     case 'k': { const k=b.dataset.k; if(k==='消') padBuf=padBuf.slice(0,-1); else if(padBuf.length<4) padBuf+=k; drawPad(); return; }
     case 'padOk': padOk(); return;
@@ -538,7 +546,7 @@ document.addEventListener('click',e=>{
       if(T.running){ T.left-=performance.now()-T.last; T.running=false; } else { T.last=performance.now(); T.running=true; }
       drawTimer(); return;
     case 'tReset': T.running=false; T.left=S.timer.dur; T.warned=false; T.ended=false; drawTimer(); return;
-    case 'tAdj': if(T.running) return; T.left=Math.max(0,Math.min(S.timer.dur,T.left+ +b.dataset.d)); T.ended=T.left<=0; T.warned=T.ended||(S.timer.warn>0&&T.left<=S.timer.warn); drawTimer(); return;
+    case 'tAdj': if(T.running) return; T.left=Math.max(0,Math.min(5999000,T.left+ +b.dataset.d)); T.ended=T.left<=0; T.warned=T.ended||(S.timer.warn>0&&T.left<=S.timer.warn); drawTimer(); return;
     case 'tDur': if(T.running) return; S.timer.dur=Math.max(10000,Math.min(600000,S.timer.dur+ +b.dataset.d)); if(S.timer.warn>=S.timer.dur) S.timer.warn=0;
       T.left=S.timer.dur; T.warned=false; T.ended=false; break;
     case 'tWarn': S.timer.warn=Math.max(0,Math.min(S.timer.dur-5000,S.timer.warn+ +b.dataset.d)); break;
