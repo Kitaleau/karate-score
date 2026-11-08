@@ -121,8 +121,8 @@ tr.todo td{color:var(--muted)}
 .divlist{display:flex;flex-direction:column;gap:8px}
 .divrow{display:grid;grid-template-columns:1fr auto;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--soft)}
 .plist{display:flex;flex-direction:column;gap:4px}
-.prow{display:grid;grid-template-columns:3.2em 1fr auto auto auto;gap:4px;align-items:center}
-.prow input{padding:6px 8px}
+.prow{display:grid;grid-template-columns:3.2em 1.3fr 1fr auto auto auto;gap:4px;align-items:center}
+.prow input{padding:6px 8px;min-width:0}
 .prow button{height:36px;min-width:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
 textarea{width:100%;min-height:110px;resize:vertical}
 h2{font-size:1rem;margin:0}
@@ -330,7 +330,7 @@ function viewSetup(){
     <div class="note">1行に1人ずつ「番号　氏名　所属」の順に書きます（間は空白・カンマ・タブのどれでも可）。出場順に並べてください。</div>
     <textarea id="bulk" placeholder="101 山田 太郎 ○○支部&#10;102 佐藤 花子 △△支部"></textarea>
     <div class="row"><button class="btn primary" data-a="bulkAdd">この区分に追加</button></div>
-    <div class="plist">${d.players.map((p,i)=>`<div class="prow"><input type="text" id="pn-${p.id}" data-pf="no" data-pi="${i}" value="${esc(p.no)}" aria-label="番号"><input type="text" id="pm-${p.id}" data-pf="name" data-pi="${i}" value="${esc(p.name)}" aria-label="氏名"><button data-a="mv" data-i="${i}" data-d="-1" aria-label="上へ">↑</button><button data-a="mv" data-i="${i}" data-d="1" aria-label="下へ">↓</button><button data-a="delP" data-i="${i}" id="dp-${p.id}" aria-label="削除">×</button></div>`).join('')||'<div class="note">まだ選手がいません。</div>'}</div></div>`;
+    <div class="plist">${d.players.map((p,i)=>`<div class="prow"><input type="text" id="pn-${p.id}" data-pf="no" data-pi="${i}" value="${esc(p.no)}" aria-label="番号"><input type="text" id="pm-${p.id}" data-pf="name" data-pi="${i}" value="${esc(p.name)}" aria-label="氏名"><input type="text" id="pt-${p.id}" data-pf="team" data-pi="${i}" value="${esc(p.team)}" placeholder="所属" aria-label="所属"><button data-a="mv" data-i="${i}" data-d="-1" aria-label="上へ">↑</button><button data-a="mv" data-i="${i}" data-d="1" aria-label="下へ">↓</button><button data-a="delP" data-i="${i}" id="dp-${p.id}" aria-label="削除">×</button></div>`).join('')||'<div class="note">まだ選手がいません。</div>'}</div></div>`;
   }
   h+=`<div class="panel"><h2>同点のときの比べ方</h2>
     <label class="row"><input type="radio" name="tie" value="min" ${S.tie==='min'?'checked':''}> 得点が同じなら ＋最低点 で比べ、それも同じなら ＋最高点</label>
