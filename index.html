@@ -237,9 +237,9 @@ function calc(p,d){
   if(s.some(v=>v==null)) return null;
   const sorted=s.slice().sort((a,b)=>a-b), mn=sorted[0], mx=sorted[sorted.length-1];
   const sum=s.reduce((a,b)=>a+b,0), base=sum-mn-mx;
-  return {base,mn,mx,plusMin:base+mn,plusMax:base+mx,total:sum,minIdx:s.indexOf(mn),maxIdx:s.lastIndexOf(mx)};
+  return {base,mn,mx,plusMin:base+mn,plusMax:sum,baseMax:base+mx,total:sum,minIdx:s.indexOf(mn),maxIdx:s.lastIndexOf(mx)};
 }
-const keys=c=>S.tie==='min'?[c.base,c.plusMin,c.total]:[c.base,c.plusMax,c.total];
+const keys=c=>S.tie==='min'?[c.base,c.plusMin,c.total]:[c.base,c.baseMax,c.total];
 function cmp(a,b){const x=keys(a.c),y=keys(b.c);for(let i=0;i<3;i++){if(x[i]!==y[i])return y[i]-x[i];}return 0;}
 function ranked(d){
   const rows=d.players.map((p,i)=>({p,i,c:calc(p,d)}));
