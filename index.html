@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>空手 採点ツール</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="空手採点">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#1b1e21">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<style>
+/* 配置：上に画面の切り替え、採点は中央に試合場（審判が周りを囲む）、下に得点 */
+:root{
+  color-scheme:light;
+  --bg:#eef0ee; --surface:#ffffff; --ink:#1b1e21; --muted:#5b636a; --line:#d3d7d4;
+  --mat:#e8c48f; --mat-edge:#fff7ea; --red:#c4291f; --on-red:#ffffff; --blue:#1f5cb8;
+  --drop:#8e969c; --good:#1d7444; --warn:#9a5600; --warn-bg:#ffe2b8; --end-bg:#ffd0cc; --soft:#f6f7f6;
+  --font:"Hiragino Kaku Gothic ProN","Hiragino Sans","BIZ UDPGothic","Yu Gothic","Meiryo",sans-serif;
+  --num:"SF Mono","Menlo","BIZ UDGothic","Consolas",monospace;
+  --display:"Hiragino Mincho ProN","Yu Mincho","BIZ UDPMincho",serif;
+}
+@media (prefers-color-scheme: dark){ :root{
+  --bg:#131517; --surface:#1d2023; --ink:#eceeef; --muted:#a2aab1; --line:#353a3f;
+  --mat:#5c4426; --mat-edge:#c9a46c; --red:#de463a; --on-red:#ffffff; --blue:#82b1ff;
+  --drop:#6b7379; --good:#5cc98a; --warn:#f0a94a; --warn-bg:#4a3310; --end-bg:#4f1712; --soft:#25292c; color-scheme:dark } }
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:calc(env(safe-area-inset-top,0px) + 10px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 40px)}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+[hidden]{display:none!important}
+button,select,input,textarea{font:inherit;color:inherit}
+button{touch-action:manipulation;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums}
+
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-size:1.3rem;margin:0;letter-spacing:.04em}
+.saved{font-size:.8rem;color:var(--muted)}
+.saved.bad{color:var(--warn);font-weight:700}
+
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:4px}
+.tabs button{padding:10px 2px;border:1px solid var(--line);background:var(--surface);border-radius:8px;font-weight:700;font-size:.82rem;white-space:nowrap}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row > *{min-width:0}
+.lbl{font-size:.8rem;color:var(--muted);letter-spacing:.05em}
+select,input[type=text],textarea{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0;font-size:16px}
+select.grow,input.grow{flex:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--soft);padding:9px 11px;font-weight:700}
+.seg button[aria-pressed="true"]{background:var(--blue);color:var(--surface)}
+.step{display:inline-flex;align-items:center;gap:6px}
+.step button{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--soft);font-size:1.2rem;font-weight:700}
+.step b{min-width:3.2ch;text-align:center;font-size:1.2rem}
+.btn{border:1px solid var(--line);background:var(--soft);border-radius:8px;padding:10px 14px;font-weight:700}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.danger{color:var(--red)}
+.btn.armed{background:var(--red);color:var(--on-red);border-color:var(--red)}
+
+.pnav{display:grid;grid-template-columns:48px 1fr 48px;gap:8px}
+.pnav button{height:48px;border-radius:8px;border:1px solid var(--line);background:var(--soft);font-size:1.5rem;font-weight:700;color:var(--blue)}
+.pnav select{height:48px;font-weight:700}
+.pinfo{display:grid;grid-template-columns:5.5em 1fr 1fr;gap:6px}
+.pinfo .memo{grid-column:1 / -1}
+
+/* 試合場 */
+.court{background:var(--mat);border-radius:10px;padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.judge{display:flex;flex-direction:column;gap:4px;align-self:start}
+.jname{font-size:.78rem;font-weight:700;text-align:center;color:var(--ink);opacity:.8}
+.jscore{height:58px;border-radius:8px;border:2px solid transparent;background:var(--surface);font-family:var(--num);font-size:1.75rem;font-variant-numeric:tabular-nums}
+.jscore.empty{color:var(--muted);font-size:1rem;font-family:var(--font)}
+.judge.dmin .jscore,.judge.dmax .jscore{color:var(--drop);text-decoration:line-through;border-color:var(--drop);border-style:dashed}
+.tag{font-size:.7rem;text-align:center;min-height:1.1em;color:var(--ink);font-weight:700}
+.pm{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.pm button{height:44px;border-radius:8px;font-size:1.45rem;font-weight:700;border:1px solid var(--line)}
+.pm .minus{background:var(--surface);color:var(--blue)}
+.pm .plus{background:var(--red);color:var(--on-red);border-color:var(--red)}
+.mat{border:3px solid var(--mat-edge);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:128px;text-align:center;padding:4px;background:transparent;color:var(--ink)}
+.mat .k{font-size:.72rem;font-weight:700}
+.mat .v{font-family:var(--num);font-size:1.9rem;line-height:1}
+.mat .who{font-size:.75rem;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.result{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center;background:var(--soft)}
+.tile .k{font-size:.78rem;color:var(--muted);font-weight:700}
+.tile .v{font-family:var(--num);font-size:1.7rem;line-height:1.2}
+.tile.main{border-color:var(--red)}
+.tile.main .k{color:var(--red)}
+.status{font-size:.95rem;text-align:center}
+.status b{font-size:1.15rem}
+.next-big{height:56px;border-radius:10px;border:0;background:var(--blue);color:var(--surface);font-size:1.15rem;font-weight:700}
+
+/* 順位表 */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.95rem;background:var(--surface)}
+th,td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:center;white-space:nowrap}
+th{font-size:.75rem;color:var(--muted);background:var(--soft);position:sticky;top:0}
+td.l{text-align:left}
+td.rank{font-family:var(--num);font-size:1.35rem;font-weight:700}
+td.big{font-family:var(--num);font-size:1.15rem;font-weight:700}
+td .x{color:var(--drop);text-decoration:line-through}
+.chip{display:inline-block;font-size:.7rem;padding:1px 6px;border-radius:99px;border:1px solid currentColor;margin-left:4px;font-weight:700;white-space:nowrap}
+.chip.w{color:var(--warn)} .chip.g{color:var(--good)}
+.note{font-size:.82rem;color:var(--muted)}
+tr.todo td{color:var(--muted)}
+
+.divlist{display:flex;flex-direction:column;gap:8px}
+.divrow{display:grid;grid-template-columns:1fr auto;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--soft)}
+.plist{display:flex;flex-direction:column;gap:4px}
+.prow{display:grid;grid-template-columns:3.2em 1fr auto auto auto;gap:4px;align-items:center}
+.prow input{padding:6px 8px}
+.prow button{height:36px;min-width:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+textarea{width:100%;min-height:110px;resize:vertical}
+h2{font-size:1rem;margin:0}
+.example{font-size:.82rem;color:var(--warn);font-weight:700}
+
+/* タイマー */
+.tdisp{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:min(22vw,7.5rem);line-height:1.05;text-align:center;border-radius:12px;padding:14px 4px;background:var(--soft);border:2px solid var(--line)}
+.tdisp.warn{background:var(--warn-bg);border-color:var(--warn)}
+.tdisp.end{background:var(--end-bg);border-color:var(--red);color:var(--red)}
+.tbtns{display:grid;grid-template-columns:2fr 1fr;gap:8px}
+.tbtns button{height:64px;border-radius:12px;font-size:1.3rem;font-weight:700;border:1px solid var(--line);background:var(--soft)}
+.tbtns .go{background:var(--blue);color:var(--surface);border-color:var(--blue)}
+.tbtns .go.pause{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.tset{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+
+/* 形カード */
+.kcard{min-height:9.5rem;border-radius:14px;border:3px double var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12px;background:var(--surface)}
+.kcard .name{font-family:var(--display);font-size:min(14vw,4rem);line-height:1.15;font-weight:700}
+.kcard .yomi{font-size:1rem;color:var(--muted)}
+.kcard.flip{animation:flip .35s ease}
+@keyframes flip{from{transform:rotateX(80deg);opacity:.2}to{transform:none;opacity:1}}
+.kgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5em,1fr));gap:6px}
+.kgrid label{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--soft);font-size:.92rem}
+
+/* 数字入力・拡大表示 */
+.pad{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20;
+  padding:0 env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.pad-card{background:var(--surface);width:100%;max-width:440px;border-radius:14px 14px 0 0;padding:14px 16px 18px;display:flex;flex-direction:column;gap:10px}
+.pad-head{display:flex;justify-content:space-between;align-items:center}
+.pad-head b{font-size:1.1rem}
+.pad-val{font-family:var(--num);font-size:2.6rem;text-align:center;border:2px solid var(--line);border-radius:10px;padding:4px;min-height:1.5em}
+.pad-val.err{border-color:var(--red);color:var(--red);font-size:1.1rem;font-family:var(--font);display:flex;align-items:center;justify-content:center}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.keys button{height:56px;border-radius:10px;border:1px solid var(--line);background:var(--soft);font-family:var(--num);font-size:1.5rem}
+.pad-ok{height:56px;border-radius:10px;border:0;background:var(--blue);color:var(--surface);font-weight:700;font-size:1.1rem}
+.bigov{position:fixed;inset:0;z-index:30;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;
+  padding:calc(env(safe-area-inset-top,0px) + 16px) max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 16px) max(16px,env(safe-area-inset-left,0px))}
+.bigov .who{font-size:1.3rem;font-weight:700}
+.bigov .k{font-size:1rem;color:var(--red);font-weight:700}
+.bigov .v{font-family:var(--num);font-size:min(30vw,11rem);line-height:1}
+.bigov .sub{display:flex;gap:18px;font-size:1.05rem}
+.bigov .sub b{font-family:var(--num);font-size:1.5rem}
+.bigov .js{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;font-family:var(--num)}
+.bigov .js span{border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+.bigov .js .x{color:var(--drop);text-decoration:line-through}
+
+@media (max-width:380px){ .jscore{font-size:1.45rem;height:52px} .pm button{height:42px} .pinfo{grid-template-columns:4.5em 1fr} .pinfo input:nth-child(3){grid-column:1 / -1} .seg button{padding:9px 8px} }
+@media (prefers-reduced-motion:reduce){ *{transition:none!important;animation:none!important} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>空手 採点ツール</h1>
+    <span id="saved" class="saved">この端末に自動保存</span>
+  </header>
+  <nav class="tabs" aria-label="画面の切り替え">
+    <button data-a="view" data-v="score">採点</button>
+    <button data-a="view" data-v="rank">順位表</button>
+    <button data-a="view" data-v="timer">タイマー</button>
+    <button data-a="view" data-v="kata">形カード</button>
+    <button data-a="view" data-v="setup">区分・選手</button>
+  </nav>
+  <main id="main"></main>
+</div>
+<div id="pad" class="pad" hidden></div>
+<div id="big" class="bigov" hidden></div>
+
+<script>
+(function(){
+const KEY='kata-score-v1';
+const J_NAMES=['主審','副審1','副審2','副審3','副審4','副審5','副審6'];
+const KATA=[['平安初段','へいあん しょだん'],['平安二段','へいあん にだん'],['平安三段','へいあん さんだん'],['平安四段','へいあん よだん'],['平安五段','へいあん ごだん'],
+  ['鉄騎初段','てっき しょだん'],['鉄騎二段','てっき にだん'],['鉄騎三段','てっき さんだん'],['抜塞大','ばっさい だい'],['観空大','かんくう だい'],
+  ['慈恩','じおん'],['燕飛','えんぴ'],['半月','はんげつ'],['十手','じって'],['岩鶴','がんかく'],['抜塞小','ばっさい しょう'],['観空小','かんくう しょう'],
+  ['珍手','ちんて'],['雲手','うんす'],['壮鎮','そうちん'],['明鏡','めいきょう'],['二十四歩','にじゅうしほ'],['五十四歩大','ごじゅうしほ だい'],
+  ['五十四歩小','ごじゅうしほ しょう'],['王冠','わんかん'],['慈陰','じいん']];
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const f=t=>(t/10).toFixed(1);
+const newP=()=>({id:uid(),no:'',name:'',team:'',memo:'',s:Array(7).fill(null)});
+
+function sample(){
+  const P=(no,name,team,s)=>({id:uid(),no,name,team,memo:'',s:s.concat(Array(7-s.length).fill(null))});
+  return {tie:'min',view:'score',cur:0,divs:[{id:uid(),name:'例）小学1・2年 男子',judges:7,base:70,pi:0,players:[
+    P('1','例）選手A','例）○○支部',[72,71,73,70,72,71,72]),
+    P('2','例）選手B','例）△△支部',[74,73,74,72,73,75,73]),
+    P('3','例）選手C','例）○○支部',[71,72,72,71,72,69,73]),
+    P('4','例）選手D','例）□□支部',[70,71])
+  ]}]};
+}
+let S, canSave=true;
+try{ const raw=localStorage.getItem(KEY); S=raw?JSON.parse(raw):null; }catch(e){ S=null; canSave=false; }
+if(!S||!Array.isArray(S.divs)) S=sample();
+S.timer=S.timer||{dur:120000,warn:30000};
+S.kataOff=Array.isArray(S.kataOff)?S.kataOff:[];
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(S)); canSave=true; }catch(e){ canSave=false; }
+  const el=document.getElementById('saved');
+  el.textContent=canSave?'この端末に自動保存':'保存できません（データを写して控えてください）';
+  el.className='saved'+(canSave?'':' bad');
+}
+const div=()=>S.divs[Math.min(S.cur,S.divs.length-1)]||null;
+const player=d=>d&&d.players.length?d.players[Math.min(d.pi||0,d.players.length-1)]:null;
+
+/* 計算：最高点・最低点を1つずつ除いた合計が得点 */
+function calc(p,d){
+  const s=p.s.slice(0,d.judges);
+  if(s.some(v=>v==null)) return null;
+  const sorted=s.slice().sort((a,b)=>a-b), mn=sorted[0], mx=sorted[sorted.length-1];
+  const sum=s.reduce((a,b)=>a+b,0), base=sum-mn-mx;
+  return {base,mn,mx,plusMin:base+mn,plusMax:base+mx,total:sum,minIdx:s.indexOf(mn),maxIdx:s.lastIndexOf(mx)};
+}
+const keys=c=>S.tie==='min'?[c.base,c.plusMin,c.total]:[c.base,c.plusMax,c.total];
+function cmp(a,b){const x=keys(a.c),y=keys(b.c);for(let i=0;i<3;i++){if(x[i]!==y[i])return y[i]-x[i];}return 0;}
+function ranked(d){
+  const rows=d.players.map((p,i)=>({p,i,c:calc(p,d)}));
+  const done=rows.filter(r=>r.c).sort(cmp), todo=rows.filter(r=>!r.c);
+  const second=S.tie==='min'?'＋最低点':'＋最高点', third=S.tie==='min'?'＋最高点':'＋最低点';
+  done.forEach((r,i)=>{
+    r.rank=(i>0&&cmp(done[i-1],r)===0)?done[i-1].rank:i+1;
+    const k=keys(r.c); let lv=0;
+    [done[i-1],done[i+1]].forEach(o=>{ if(!o) return; const q=keys(o.c);
+      if(q[0]===k[0]) lv=Math.max(lv, q[1]!==k[1]?1:(q[2]!==k[2]?2:3)); });
+    r.note=['',second+'で決定',third+'で決定','完全に同点'][lv];
+  });
+  return {done,todo};
+}
+
+/* 描画 */
+const M=document.getElementById('main');
+function render(){
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===S.view));
+  if(S.view==='rank') M.innerHTML=viewRank();
+  else if(S.view==='setup') M.innerHTML=viewSetup();
+  else if(S.view==='timer') { M.innerHTML=viewTimer(); drawTimer(); }
+  else if(S.view==='kata') M.innerHTML=viewKata();
+  else M.innerHTML=viewScore();
+}
+function divSelect(id){
+  return `<select id="${id}" class="grow" aria-label="区分">${S.divs.map((d,i)=>`<option value="${i}" ${i===S.cur?'selected':''}>${esc(d.name)}（${d.players.length}人）</option>`).join('')}</select>`;
+}
+function viewScore(){
+  const d=div();
+  if(!d) return `<div class="panel"><p>区分がまだありません。</p><button class="btn primary" data-a="view" data-v="setup">区分を作る</button></div>`;
+  const p=player(d);
+  let h=`<div class="panel">
+    <div class="row"><span class="lbl">区分</span>${divSelect('divSel')}</div>
+    <div class="row" style="justify-content:space-between">
+      <div class="seg" role="group" aria-label="審判の人数">${[7,5,3].map(n=>`<button data-a="judges" data-n="${n}" aria-pressed="${d.judges===n}">${n}人</button>`).join('')}</div>
+      <div class="step"><span class="lbl">基準点</span><button data-a="base" data-d="-1" aria-label="基準点を下げる">−</button><b class="num">${f(d.base)}</b><button data-a="base" data-d="1" aria-label="基準点を上げる">＋</button></div>
+    </div></div>`;
+  if(!p) return h+`<div class="panel"><p>この区分には選手がいません。</p><div class="row"><button class="btn primary" data-a="addPlayer">選手を1人追加</button><button class="btn" data-a="view" data-v="setup">まとめて登録する</button></div></div>`;
+  const c=calc(p,d), idx=d.players.indexOf(p);
+  h+=`<div class="pnav"><button data-a="prev" aria-label="前の選手">‹</button>
+    <select id="pSel" aria-label="選手">${d.players.map((q,i)=>{const cc=calc(q,d);return `<option value="${i}" ${i===idx?'selected':''}>${i+1}番目　${esc(q.no)} ${esc(q.name)}${cc?'　'+f(cc.base):'　未'}</option>`}).join('')}</select>
+    <button data-a="next" aria-label="次の選手">›</button></div>
+  <div class="pinfo"><input type="text" id="pNo" value="${esc(p.no)}" placeholder="番号" aria-label="番号"><input type="text" id="pName" value="${esc(p.name)}" placeholder="氏名" aria-label="氏名"><input type="text" id="pTeam" value="${esc(p.team)}" placeholder="所属" aria-label="所属"><input type="text" class="memo" id="pMemo" value="${esc(p.memo)}" placeholder="メモ（形の名前など）" aria-label="メモ"></div>`;
+  const layout=d.judges===7?[1,0,2,3,'M',4,5,'B',6]:d.judges===5?[1,0,2,'B','M','B',3,'B',4]:[1,0,2,'B','M','B'];
+  h+=`<div class="court">`+layout.map(x=>{
+    if(x==='M') return `<button class="mat" data-a="big" aria-label="得点を大きく表示"><span class="k">得点</span><span class="v">${c?f(c.base):'—'}</span><span class="who">${esc(p.name)}</span><span class="k">押すと拡大</span></button>`;
+    if(x==='B') return `<div></div>`;
+    const v=p.s[x], dm=c&&c.minIdx===x, dx=c&&c.maxIdx===x;
+    return `<div class="judge ${dm?'dmin':''} ${dx?'dmax':''}"><div class="jname">${J_NAMES[x]}</div>
+      <button class="jscore ${v==null?'empty':''}" data-a="pad" data-j="${x}" aria-label="${J_NAMES[x]}の点を入力">${v==null?'押して入力':f(v)}</button>
+      <div class="pm"><button class="minus" data-a="adj" data-j="${x}" data-d="-1" aria-label="${J_NAMES[x]} 0.1下げる">−</button><button class="plus" data-a="adj" data-j="${x}" data-d="1" aria-label="${J_NAMES[x]} 0.1上げる">＋</button></div>
+      <div class="tag">${dm?'最低点（除外）':dx?'最高点（除外）':''}</div></div>`;
+  }).join('')+`</div>
+  <div class="row"><button class="btn" data-a="fill">未入力を基準点で埋める</button><button class="btn danger" data-a="reset" id="resetBtn">この選手の点を消す</button></div>`;
+  const filled=p.s.slice(0,d.judges).filter(v=>v!=null).length;
+  h+=`<div class="result">
+    <div class="tile main"><div class="k">得点</div><div class="v">${c?f(c.base):'—'}</div></div>
+    <div class="tile"><div class="k">＋最低点</div><div class="v">${c?f(c.plusMin):'—'}</div></div>
+    <div class="tile"><div class="k">＋最高点</div><div class="v">${c?f(c.plusMax):'—'}</div></div></div>`;
+  if(c){ const rk=ranked(d), r=rk.done.find(x=>x.p===p);
+    h+=`<div class="status">この区分で <b class="num">${r.rank}位</b>（採点済み ${rk.done.length}人中）${r.note?`<span class="chip w">${r.note}</span>`:''}</div>`;
+  } else h+=`<div class="status">あと <b class="num">${d.judges-filled}人</b> の点を入れると得点が出ます</div>`;
+  h+=`<button class="next-big" data-a="nextOrAdd">${idx<d.players.length-1?'次の選手へ ›':'選手を追加して次へ ›'}</button>`;
+  return h;
+}
+function viewRank(){
+  const d=div();
+  if(!d) return `<div class="panel"><p>区分がまだありません。</p></div>`;
+  const {done,todo}=ranked(d), n=d.judges;
+  const tieTxt=S.tie==='min'?'＋最低点 → ＋最高点':'＋最高点 → ＋最低点';
+  const scores=(p,c)=>p.s.slice(0,n).map((v,j)=>`<td class="num">${v==null?'—':(c&&(c.minIdx===j||c.maxIdx===j)?`<span class="x">${f(v)}</span>`:f(v))}</td>`).join('');
+  let h=`<div class="panel"><div class="row"><span class="lbl">区分</span>${divSelect('divSel')}</div>
+  <div class="note">${n}人審判。最高点と最低点（線を引いた点）を除いた合計が得点です。同点のときは ${tieTxt} の順で比べています。</div></div>
+  <div class="tbl-wrap"><table><thead><tr><th>順位</th><th>番号</th><th>氏名</th><th>所属</th>${J_NAMES.slice(0,n).map(x=>`<th>${x}</th>`).join('')}<th>得点</th><th>＋最低点</th><th>＋最高点</th><th>メモ</th></tr></thead><tbody>`;
+  done.forEach(r=>{ h+=`<tr><td class="rank">${r.rank}</td><td class="num">${esc(r.p.no)}</td><td class="l">${esc(r.p.name)}${r.note?`<span class="chip ${r.note==='完全に同点'?'w':'g'}">${r.note}</span>`:''}</td><td class="l">${esc(r.p.team)}</td>${scores(r.p,r.c)}<td class="big">${f(r.c.base)}</td><td class="num">${f(r.c.plusMin)}</td><td class="num">${f(r.c.plusMax)}</td><td class="l">${esc(r.p.memo)}</td></tr>`; });
+  todo.forEach(r=>{ h+=`<tr class="todo"><td>未</td><td class="num">${esc(r.p.no)}</td><td class="l">${esc(r.p.name)}</td><td class="l">${esc(r.p.team)}</td>${scores(r.p,null)}<td>—</td><td>—</td><td>—</td><td class="l">${esc(r.p.memo)}</td></tr>`; });
+  if(!d.players.length) h+=`<tr><td colspan="${8+n}">選手がいません</td></tr>`;
+  h+=`</tbody></table></div>`;
+  if(done.some(r=>r.note==='完全に同点')) h+=`<div class="note" style="color:var(--warn)">「完全に同点」の選手は、点数では順位が決まりません。大会の決まり（決定戦など）に従ってください。</div>`;
+  return h;
+}
+function viewSetup(){
+  const d=div();
+  let h=`<div class="panel"><h2>区分</h2><div class="note">年齢・性別・級段ごとに区分を作ります。区分ごとに審判の人数と基準点を変えられます（採点の画面で切り替え）。</div><div class="divlist">`;
+  S.divs.forEach((x,i)=>{ h+=`<div class="divrow"><div class="row"><input type="text" class="grow" id="dn-${x.id}" data-div="${i}" value="${esc(x.name)}" aria-label="区分の名前"><span class="lbl">${x.judges}人審判・基準点${f(x.base)}・${x.players.length}人</span></div>
+    <div class="row"><button class="btn ${i===S.cur?'primary':''}" data-a="pickDiv" data-i="${i}">${i===S.cur?'選択中':'選ぶ'}</button><button class="btn danger" data-a="delDiv" data-i="${i}" id="dd-${x.id}">削除</button></div></div>`; });
+  h+=`</div><div class="row"><input type="text" class="grow" id="newDiv" placeholder="例：小学3・4年 女子 / 一般 男子 有段" aria-label="新しい区分の名前"><button class="btn primary" data-a="addDiv">区分を追加</button></div></div>`;
+  if(d){
+    h+=`<div class="panel"><h2>選手の登録（${esc(d.name)}）</h2>
+    <div class="note">1行に1人ずつ「番号　氏名　所属」の順に書きます（間は空白・カンマ・タブのどれでも可）。出場順に並べてください。</div>
+    <textarea id="bulk" placeholder="101 山田 太郎 ○○支部&#10;102 佐藤 花子 △△支部"></textarea>
+    <div class="row"><button class="btn primary" data-a="bulkAdd">この区分に追加</button></div>
+    <div class="plist">${d.players.map((p,i)=>`<div class="prow"><input type="text" id="pn-${p.id}" data-pf="no" data-pi="${i}" value="${esc(p.no)}" aria-label="番号"><input type="text" id="pm-${p.id}" data-pf="name" data-pi="${i}" value="${esc(p.name)}" aria-label="氏名"><button data-a="mv" data-i="${i}" data-d="-1" aria-label="上へ">↑</button><button data-a="mv" data-i="${i}" data-d="1" aria-label="下へ">↓</button><button data-a="delP" data-i="${i}" id="dp-${p.id}" aria-label="削除">×</button></div>`).join('')||'<div class="note">まだ選手がいません。</div>'}</div></div>`;
+  }
+  h+=`<div class="panel"><h2>同点のときの比べ方</h2>
+    <label class="row"><input type="radio" name="tie" value="min" ${S.tie==='min'?'checked':''}> 得点が同じなら ＋最低点 で比べ、それも同じなら ＋最高点</label>
+    <label class="row"><input type="radio" name="tie" value="max" ${S.tie==='max'?'checked':''}> 得点が同じなら ＋最高点 で比べ、それも同じなら ＋最低点</label>
+    <div class="note">大会の要項で決まりを確かめて選んでください。</div></div>
+  <div class="panel"><h2>データを送る・まとめる</h2>
+    <div class="note">データはこの端末にだけ保存されます。ほかの人とは、文字にして送り合います。</div>
+    <div class="note"><b>本部の1台にまとめる流れ</b><br>① 本部が区分と選手を登録し、「データを写す」を押してLINEなどで各担当へ送る<br>② 担当は受け取った文を下の欄に貼り、「置き換える」を押してから採点する<br>③ 採点が終わったら、担当が「データを写す」を押して本部へ送り返す<br>④ 本部は受け取った文を貼り、「取り込む」を押す（担当の人数分くり返す）</div>
+    <div class="note">取り込むと、同じ区分名・同じ選手（番号と氏名）は1つにまとまります。点が入っている方の点が使われ、空欄で消されることはありません。区切りごとに写してメモ帳に貼っておけば、控えにもなります。</div>
+    <div class="row"><button class="btn primary" data-a="copy">データを写す</button><span id="copyMsg" class="note"></span></div>
+    <textarea id="restore" placeholder="受け取ったデータをここに貼る"></textarea>
+    <div class="row"><button class="btn primary" data-a="merge">取り込む（今のデータに足す）</button><button class="btn" data-a="restore" id="restoreBtn">置き換える（今のデータと入れ替え）</button></div>
+    <div id="mergeMsg" class="note" style="font-weight:700"></div>
+    <div class="row"><button class="btn danger" data-a="wipe" id="wipeBtn">全部消して最初から</button></div></div>
+  <div class="panel"><h2>ホーム画面に追加する</h2>
+    <div class="note">iPhone：Safariでこのページを開き、下の共有ボタン（四角から上向きの矢印）→「ホーム画面に追加」。Android：Chromeの右上の︙→「ホーム画面に追加」。一度開いておけば、電波がなくても動きます。</div></div>
+  <div class="note example">最初に入っている「例）」の区分と選手は見本です。区分の「削除」で消せます。</div>`;
+  return h;
+}
+
+/* 組手タイマー */
+const T={left:S.timer.dur,running:false,last:0,warned:false,ended:false};
+const fmtT=ms=>{ const t=Math.ceil(Math.max(0,ms)/100), m=Math.floor(t/600), s=(t%600)/10; return m+':'+s.toFixed(1).padStart(4,'0'); };
+const fmtS=ms=>{ const s=Math.round(ms/1000); return Math.floor(s/60)+'分'+String(s%60).padStart(2,'0')+'秒'; };
+let AC=null;
+function ensureAudio(){ try{ AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume(); }catch(e){} }
+function beep(freq,dur,times,gap){
+  if(!AC) return;
+  for(let i=0;i<times;i++){ const t0=AC.currentTime+i*(dur+gap), o=AC.createOscillator(), g=AC.createGain();
+    o.type='square'; o.frequency.value=freq; g.gain.setValueAtTime(0.25,t0); g.gain.setValueAtTime(0,t0+dur);
+    o.connect(g); g.connect(AC.destination); o.start(t0); o.stop(t0+dur+0.02); }
+}
+function viewTimer(){
+  const t=S.timer;
+  return `<div class="panel">
+    <div id="tDisp" class="tdisp">${fmtT(T.left)}</div>
+    <div id="tState" class="status"></div>
+    <div class="tbtns"><button class="go" data-a="tStart" id="tStartBtn">開始</button><button data-a="tReset" id="tResetBtn">リセット</button></div>
+    <div class="row" style="justify-content:center"><span class="lbl">止めて時間を直す</span><button class="btn" data-a="tAdj" data-d="-1000">−1秒</button><button class="btn" data-a="tAdj" data-d="1000">＋1秒</button></div>
+  </div>
+  <div class="panel">
+    <div class="tset"><span>試合時間</span><div class="step"><button data-a="tDur" data-d="-10000" aria-label="試合時間を10秒短く">−</button><b class="num" style="min-width:6ch">${fmtS(t.dur)}</b><button data-a="tDur" data-d="10000" aria-label="試合時間を10秒長く">＋</button></div></div>
+    <div class="tset"><span>予鈴（残り時間）</span><div class="step"><button data-a="tWarn" data-d="-5000" aria-label="予鈴を5秒早く">−</button><b class="num" style="min-width:6ch">${t.warn>0?fmtS(t.warn):'鳴らさない'}</b><button data-a="tWarn" data-d="5000" aria-label="予鈴を5秒遅く">＋</button></div></div>
+    <div class="note">試合時間は10秒きざみ、予鈴は5秒きざみで変えられます。予鈴で短い音が2回、終了で長い音が1回鳴ります。iPhoneは、消音（マナー）スイッチが入っていると音が出ないことがあります。</div>
+  </div>`;
+}
+function drawTimer(){
+  const el=document.getElementById('tDisp'); if(!el) return;
+  el.textContent=fmtT(T.left);
+  el.className='tdisp'+(T.ended?' end':(T.warned?' warn':''));
+  const b=document.getElementById('tStartBtn');
+  b.textContent=T.ended?'終了':(T.running?'一時停止':(T.left<S.timer.dur?'再開':'開始'));
+  b.className='go'+(T.running?' pause':'');
+  document.getElementById('tState').textContent=T.ended?'試合終了':(T.warned?'予鈴が鳴りました':(T.running?'計測中':''));
+}
+setInterval(()=>{
+  if(!T.running) return;
+  const now=performance.now(); T.left-=now-T.last; T.last=now;
+  if(!T.warned&&S.timer.warn>0&&T.left<=S.timer.warn&&T.left>0){ T.warned=true; beep(880,0.22,2,0.14); }
+  if(T.left<=0){ T.left=0; T.running=false; T.ended=true; T.warned=true; beep(620,1.4,1,0); }
+  drawTimer();
+},50);
+
+/* 形カード */
+function viewKata(){
+  const last=KATA.find(k=>k[0]===S.kataLast);
+  const on=KATA.filter(k=>!S.kataOff.includes(k[0])).length;
+  return `<div class="panel">
+    <div id="kCard" class="kcard">${last?`<span class="yomi">${last[1]}</span><span class="name">${last[0]}</span>`:'<span class="note">「形を引く」を押してください</span>'}</div>
+    <button class="next-big" data-a="kDraw">形を引く</button>
+    <div class="note">紅白方式の練習用に、選んだ形の中から1つを無作為に表示します。</div>
+  </div>
+  <div class="panel"><h2>対象の形（${on}／${KATA.length}）</h2>
+    <div class="row"><button class="btn" data-a="kSet" data-k="all">全部</button><button class="btn" data-a="kSet" data-k="heian">平安・鉄騎だけ</button><button class="btn" data-a="kSet" data-k="none">全部外す</button></div>
+    <div class="kgrid">${KATA.map(k=>`<label><input type="checkbox" data-kata="${k[0]}" ${S.kataOff.includes(k[0])?'':'checked'}>${k[0]}</label>`).join('')}</div>
+  </div>`;
+}
+
+/* 拡大表示 */
+const BIG=document.getElementById('big');
+function openBig(){
+  const d=div(), p=player(d); if(!p) return; const c=calc(p,d);
+  BIG.innerHTML=`<div class="who">${esc(p.no)} ${esc(p.name)}</div><div class="k">得点</div><div class="v">${c?f(c.base):'—'}</div>
+    <div class="sub"><span>＋最低点 <b>${c?f(c.plusMin):'—'}</b></span><span>＋最高点 <b>${c?f(c.plusMax):'—'}</b></span></div>
+    <div class="js">${p.s.slice(0,d.judges).map((v,j)=>`<span class="${c&&(c.minIdx===j||c.maxIdx===j)?'x':''}">${v==null?'—':f(v)}</span>`).join('')}</div>
+    <div class="note">画面を押すと戻ります</div>`;
+  BIG.hidden=false;
+}
+
+/* 送られてきたデータの読み取りと取り込み */
+function readPasted(){
+  const t=document.getElementById('restore').value, a=t.indexOf('{'), b=t.lastIndexOf('}');
+  if(a<0||b<a) return null;
+  try{ const o=JSON.parse(t.slice(a,b+1)); if(!o||!Array.isArray(o.divs)) return null;
+    o.divs.forEach(d=>{ d.id=d.id||uid(); d.name=String(d.name||''); d.judges=[3,5,7].includes(d.judges)?d.judges:7; d.base=typeof d.base==='number'?d.base:70; d.pi=0;
+      d.players=(d.players||[]).map(p=>({id:p.id||uid(),no:String(p.no||''),name:String(p.name||''),team:String(p.team||''),memo:String(p.memo||''),
+        s:Array.from({length:7},(_,j)=>typeof (p.s||[])[j]==='number'?p.s[j]:null)})); });
+    return o; }catch(e){ return null; }
+}
+function mergeIn(o){
+  const r={addD:0,addP:0,upd:0,diff:0};
+  o.divs.forEach(id=>{
+    const ld=S.divs.find(x=>x.id===id.id)||S.divs.find(x=>x.name.trim()===id.name.trim());
+    if(!ld){ S.divs.push(id); r.addD++; r.addP+=id.players.length; return; }
+    id.players.forEach(ip=>{
+      const lp=ld.players.find(x=>x.id===ip.id)||ld.players.find(x=>(x.no||x.name)&&x.no.trim()===ip.no.trim()&&x.name.trim()===ip.name.trim());
+      if(!lp){ ld.players.push(ip); r.addP++; return; }
+      let ch=false, df=false;
+      for(let j=0;j<7;j++) if(ip.s[j]!=null&&ip.s[j]!==lp.s[j]){ if(lp.s[j]!=null) df=true; lp.s[j]=ip.s[j]; ch=true; }
+      if(!lp.team&&ip.team) lp.team=ip.team;
+      if(!lp.memo&&ip.memo) lp.memo=ip.memo;
+      if(ch) r.upd++; if(df) r.diff++;
+    });
+  });
+  return r;
+}
+
+/* 2回押しで実行 */
+let armed=null, armTimer=null;
+function confirm2(id,label){
+  if(armed===id){ armed=null; clearTimeout(armTimer); return true; }
+  armed=id; const el=document.getElementById(id); if(el){ el.classList.add('armed'); el.dataset.old=el.textContent; el.textContent=label||'もう一度押すと実行'; }
+  clearTimeout(armTimer); armTimer=setTimeout(()=>{ const e=document.getElementById(id); if(e){e.classList.remove('armed'); e.textContent=e.dataset.old;} armed=null; },3000);
+  return false;
+}
+
+/* 数字入力 */
+let padJ=null, padBuf='';
+const PAD=document.getElementById('pad');
+function parsePad(b){
+  if(!b) return null;
+  let v;
+  if(b.includes('.')){ if(!/^\d{1,2}\.\d?$/.test(b)) return NaN; v=Math.round(parseFloat(b)*10); }
+  else if(b.length===1) v=+b*10;
+  else if(b==='10'||b==='100') v=100;
+  else if(b.length===2) v=+b;
+  else return NaN;
+  return (v>=0&&v<=100)?v:NaN;
+}
+function openPad(j){ padJ=j; padBuf=''; drawPad(); PAD.hidden=false; }
+function drawPad(){
+  const d=div(), p=player(d), v=parsePad(padBuf), cur=p.s[padJ];
+  const shown=padBuf===''?(cur==null?'—':f(cur)):(Number.isNaN(v)?'0.0〜10.0で入れてください':f(v));
+  PAD.innerHTML=`<div class="pad-card" role="dialog" aria-label="${J_NAMES[padJ]}の点を入力">
+    <div class="pad-head"><b>${J_NAMES[padJ]}（${esc(p.name)}）</b><button class="btn" data-a="padClose">閉じる</button></div>
+    <div class="pad-val ${padBuf&&Number.isNaN(v)?'err':''}">${shown}</div>
+    <div class="note">「85」と押すと 8.5、「7」だけなら 7.0 になります。</div>
+    <div class="keys">${['1','2','3','4','5','6','7','8','9','.','0','消'].map(k=>`<button data-a="k" data-k="${k}">${k}</button>`).join('')}</div>
+    <button class="pad-ok" data-a="padOk">${padJ<d.judges-1?'決定して次の審判へ':'決定'}</button></div>`;
+}
+function padOk(){
+  const d=div(), p=player(d), v=parsePad(padBuf);
+  if(padBuf!==''){ if(Number.isNaN(v)){ drawPad(); return; } p.s[padJ]=v; save(); }
+  if(padJ<d.judges-1){ padJ++; padBuf=''; render(); drawPad(); } else { PAD.hidden=true; render(); }
+}
+
+/* 操作 */
+function wake(){ try{ if(navigator.wakeLock&&!wake.l) navigator.wakeLock.request('screen').then(l=>{wake.l=l; l.addEventListener('release',()=>wake.l=null);}).catch(()=>{}); }catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') wake.l=null; });
+
+document.addEventListener('click',e=>{
+  wake();
+  if(!BIG.hidden){ BIG.hidden=true; return; }
+  if(e.target===PAD){ PAD.hidden=true; return; }
+  const b=e.target.closest('[data-a]'); if(!b) return;
+  const a=b.dataset.a, d=div(), p=player(d);
+  switch(a){
+    case 'view': S.view=b.dataset.v; break;
+    case 'judges': d.judges=+b.dataset.n; break;
+    case 'base': d.base=Math.max(0,Math.min(100,d.base+ +b.dataset.d)); break;
+    case 'prev': d.pi=Math.max(0,(d.pi||0)-1); break;
+    case 'next': d.pi=Math.min(d.players.length-1,(d.pi||0)+1); break;
+    case 'nextOrAdd':
+      if((d.pi||0)<d.players.length-1) d.pi++;
+      else { d.players.push(newP()); d.pi=d.players.length-1; }
+      window.scrollTo({top:0}); break;
+    case 'addPlayer': d.players.push(newP()); d.pi=d.players.length-1; break;
+    case 'adj': { const j=+b.dataset.j, cur=p.s[j]==null?d.base:p.s[j]; p.s[j]=Math.max(0,Math.min(100,cur+ +b.dataset.d)); break; }
+    case 'pad': openPad(+b.dataset.j); return;
+    case 'padClose': PAD.hidden=true; render(); return;
+    case 'k': { const k=b.dataset.k; if(k==='消') padBuf=padBuf.slice(0,-1); else if(padBuf.length<4) padBuf+=k; drawPad(); return; }
+    case 'padOk': padOk(); return;
+    case 'big': openBig(); return;
+    case 'fill': for(let j=0;j<d.judges;j++) if(p.s[j]==null) p.s[j]=d.base; break;
+    case 'reset': if(!confirm2('resetBtn','もう一度押すと消します')) return; p.s=Array(7).fill(null); break;
+    case 'pickDiv': S.cur=+b.dataset.i; break;
+    case 'addDiv': { const el=document.getElementById('newDiv'), n=el.value.trim()||('区分'+(S.divs.length+1));
+      S.divs.push({id:uid(),name:n,judges:d?d.judges:7,base:d?d.base:70,pi:0,players:[]}); S.cur=S.divs.length-1; break; }
+    case 'delDiv': { const i=+b.dataset.i; if(!confirm2('dd-'+S.divs[i].id,'もう一度で削除')) return; S.divs.splice(i,1); S.cur=Math.max(0,Math.min(S.cur,S.divs.length-1)); break; }
+    case 'bulkAdd': { const t=document.getElementById('bulk').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+      t.forEach(line=>{ const parts=line.split(/[\s,，、\t]+/); const q=newP();
+        if(/^\d+$/.test(parts[0])) q.no=parts.shift();
+        if(parts.length>=3){ q.team=parts.pop(); q.name=parts.join(' '); } else if(parts.length===2 && /支部|道場|会|クラブ|学校|大学|高校|中学/.test(parts[1])){ q.name=parts[0]; q.team=parts[1]; } else q.name=parts.join(' ');
+        d.players.push(q); }); break; }
+    case 'mv': { const i=+b.dataset.i, k=i+ +b.dataset.d; if(k<0||k>=d.players.length) return; const t=d.players[i]; d.players[i]=d.players[k]; d.players[k]=t; break; }
+    case 'delP': { const i=+b.dataset.i; if(!confirm2('dp-'+d.players[i].id,'もう一度')) return; d.players.splice(i,1); d.pi=Math.max(0,Math.min(d.pi||0,d.players.length-1)); break; }
+    case 'copy': { const txt='【空手 採点データ】'+JSON.stringify({tie:S.tie,divs:S.divs}), msg=document.getElementById('copyMsg'), ta=document.getElementById('restore');
+      const fallback=()=>{ ta.value=txt; ta.focus(); ta.select(); msg.textContent='下の欄に出しました。全部選んでコピーしてください。'; };
+      try{ navigator.clipboard.writeText(txt).then(()=>{ msg.textContent='写しました。LINEやメモ帳に貼ってください。'; },fallback); }catch(err){ fallback(); }
+      return; }
+    case 'merge': case 'restore': { const msg=document.getElementById('mergeMsg'), o=readPasted();
+      if(!o){ msg.textContent='貼ったデータが読めませんでした。送られてきた文を最初から最後まで全部貼ってください。'; return; }
+      if(a==='restore'){ if(!confirm2('restoreBtn','もう一度押すと入れ替えます')) return; S.divs=o.divs; S.tie=o.tie||S.tie; S.cur=0; save(); render(); document.getElementById('mergeMsg').textContent='入れ替えました（区分'+o.divs.length+'つ）。'; return; }
+      const r=mergeIn(o); save(); render();
+      document.getElementById('mergeMsg').textContent=`取り込みました。新しい区分 ${r.addD}つ、新しい選手 ${r.addP}人、点を更新した選手 ${r.upd}人。`+(r.diff?` うち ${r.diff}人は、こちらの点と違ったので送られてきた点にしました。`:'');
+      return; }
+    case 'wipe': if(!confirm2('wipeBtn','もう一度押すと全部消します')) return; S.divs=[]; S.cur=0; break;
+    /* タイマー */
+    case 'tStart': ensureAudio(); if(T.ended) return;
+      if(T.running){ T.left-=performance.now()-T.last; T.running=false; } else { T.last=performance.now(); T.running=true; }
+      drawTimer(); return;
+    case 'tReset': T.running=false; T.left=S.timer.dur; T.warned=false; T.ended=false; drawTimer(); return;
+    case 'tAdj': if(T.running) return; T.left=Math.max(0,Math.min(S.timer.dur,T.left+ +b.dataset.d)); T.ended=T.left<=0; T.warned=T.ended||(S.timer.warn>0&&T.left<=S.timer.warn); drawTimer(); return;
+    case 'tDur': if(T.running) return; S.timer.dur=Math.max(10000,Math.min(600000,S.timer.dur+ +b.dataset.d)); if(S.timer.warn>=S.timer.dur) S.timer.warn=0;
+      T.left=S.timer.dur; T.warned=false; T.ended=false; break;
+    case 'tWarn': S.timer.warn=Math.max(0,Math.min(S.timer.dur-5000,S.timer.warn+ +b.dataset.d)); break;
+    /* 形カード */
+    case 'kDraw': { const pool=KATA.filter(k=>!S.kataOff.includes(k[0]));
+      if(!pool.length){ document.getElementById('kCard').innerHTML='<span class="note">対象の形を1つ以上選んでください</span>'; return; }
+      let pick=pool[Math.floor(Math.random()*pool.length)];
+      if(pool.length>1) while(pick[0]===S.kataLast) pick=pool[Math.floor(Math.random()*pool.length)];
+      S.kataLast=pick[0]; save(); render(); const c=document.getElementById('kCard'); c.classList.remove('flip'); void c.offsetWidth; c.classList.add('flip'); return; }
+    case 'kSet': { const k=b.dataset.k; S.kataOff = k==='all'?[]:k==='none'?KATA.map(x=>x[0]):KATA.filter(x=>!/^平安|^鉄騎/.test(x[0])).map(x=>x[0]); break; }
+    default: return;
+  }
+  save(); render();
+});
+document.addEventListener('change',e=>{
+  const t=e.target, d=div();
+  if(t.id==='divSel'){ S.cur=+t.value; save(); render(); }
+  else if(t.id==='pSel'){ d.pi=+t.value; save(); render(); }
+  else if(t.name==='tie'){ S.tie=t.value; save(); }
+  else if(t.dataset.kata){ const k=t.dataset.kata; S.kataOff=S.kataOff.filter(x=>x!==k); if(!t.checked) S.kataOff.push(k); save(); render(); }
+});
+document.addEventListener('input',e=>{
+  const t=e.target, d=div(), p=player(d);
+  if(t.id==='pNo') p.no=t.value; else if(t.id==='pName') p.name=t.value; else if(t.id==='pTeam') p.team=t.value; else if(t.id==='pMemo') p.memo=t.value;
+  else if(t.dataset.div!=null) S.divs[+t.dataset.div].name=t.value;
+  else if(t.dataset.pf) d.players[+t.dataset.pi][t.dataset.pf]=t.value;
+  else return;
+  save();
+});
+document.addEventListener('keydown',e=>{
+  if(PAD.hidden) return;
+  if(/^[0-9.]$/.test(e.key)){ if(padBuf.length<4) padBuf+=e.key; drawPad(); e.preventDefault(); }
+  else if(e.key==='Backspace'){ padBuf=padBuf.slice(0,-1); drawPad(); e.preventDefault(); }
+  else if(e.key==='Enter'){ padOk(); e.preventDefault(); }
+  else if(e.key==='Escape'){ PAD.hidden=true; render(); }
+});
+save(); render();
+if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
