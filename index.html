@@ -40,6 +40,9 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
 h1{font-family:var(--display);font-size:1.3rem;margin:0;letter-spacing:.04em}
 .saved{font-size:.8rem;color:var(--muted)}
+.ttl{width:100%;font-size:.95rem;font-weight:700;margin:2px 0 0}
+.ttl:empty{display:none}
+.filebtn{display:inline-flex;align-items:center;cursor:pointer}
 .saved.bad{color:var(--warn);font-weight:700}
 
 .tabs{display:grid;grid-template-columns:repeat(5,1fr);position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
@@ -181,6 +184,7 @@ h2{font-size:1rem;margin:0}
   <header>
     <h1>空手 採点ツール</h1>
     <span id="saved" class="saved">この端末に自動保存</span>
+    <div id="ttl" class="ttl"></div>
   </header>
   <nav class="tabs" aria-label="画面の切り替え">
     <button data-a="view" data-v="score">採点</button>
@@ -258,6 +262,7 @@ function ranked(d){
 /* 描画 */
 const M=document.getElementById('main');
 function render(){
+  document.getElementById('ttl').textContent=S.title||'';
   document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===S.view));
   if(S.view==='rank') M.innerHTML=viewRank();
   else if(S.view==='setup') M.innerHTML=viewSetup();
@@ -322,7 +327,8 @@ function viewRank(){
 }
 function viewSetup(){
   const d=div();
-  let h=`<div class="panel"><h2>区分</h2><div class="note">年齢・性別・級段ごとに区分を作ります。区分ごとに審判の人数と基準点を変えられます（採点の画面で切り替え）。</div><div class="divlist">`;
+  let h=`<div class="panel"><h2>大会名</h2><input type="text" class="grow" id="tTitle" value="${esc(S.title)}" placeholder="例：第79回東京都空手道選手権大会" aria-label="大会名" style="width:100%"></div>
+  <div class="panel"><h2>区分</h2><div class="note">年齢・性別・級段ごとに区分を作ります。区分ごとに審判の人数と基準点を変えられます（採点の画面で切り替え）。</div><div class="divlist">`;
   S.divs.forEach((x,i)=>{ h+=`<div class="divrow"><div class="row"><input type="text" class="grow" id="dn-${x.id}" data-div="${i}" value="${esc(x.name)}" aria-label="区分の名前"><span class="lbl">${x.judges}人審判・基準点${f(x.base)}・${x.players.length}人</span></div>
     <div class="row"><button class="btn ${i===S.cur?'primary':''}" data-a="pickDiv" data-i="${i}">${i===S.cur?'選択中':'選ぶ'}</button><button class="btn danger" data-a="delDiv" data-i="${i}" id="dd-${x.id}">削除</button></div></div>`; });
   h+=`</div><div class="row"><input type="text" class="grow" id="newDiv" placeholder="例：小学3・4年 女子 / 一般 男子 有段" aria-label="新しい区分の名前"><button class="btn primary" data-a="addDiv">区分を追加</button></div></div>`;
@@ -342,6 +348,7 @@ function viewSetup(){
     <div class="note"><b>本部の1台にまとめる流れ</b><br>① 本部が区分と選手を登録し、「データを写す」を押してLINEなどで各担当へ送る<br>② 担当は受け取った文を下の欄に貼り、「置き換える」を押してから採点する<br>③ 採点が終わったら、担当が「データを写す」を押して本部へ送り返す<br>④ 本部は受け取った文を貼り、「取り込む」を押す（担当の人数分くり返す）</div>
     <div class="note">取り込むと、同じ区分名・同じ選手（番号と氏名）は1つにまとまります。点が入っている方の点が使われ、空欄で消されることはありません。区切りごとに写してメモ帳に貼っておけば、控えにもなります。</div>
     <div class="row"><button class="btn primary" data-a="copy">データを写す</button><span id="copyMsg" class="note"></span></div>
+    <div class="row"><label class="btn filebtn">ファイルから読み込む<input type="file" id="fileIn" accept=".txt,.json,text/plain,application/json" hidden></label><span class="note">受け取ったデータのファイルを選ぶと、下の欄に入ります</span></div>
     <textarea id="restore" placeholder="受け取ったデータをここに貼る"></textarea>
     <div class="row"><button class="btn primary" data-a="merge">取り込む（今のデータに足す）</button><button class="btn" data-a="restore" id="restoreBtn">置き換える（今のデータと入れ替え）</button></div>
     <div id="mergeMsg" class="note" style="font-weight:700"></div>
@@ -532,14 +539,14 @@ document.addEventListener('click',e=>{
         d.players.push(q); }); break; }
     case 'mv': { const i=+b.dataset.i, k=i+ +b.dataset.d; if(k<0||k>=d.players.length) return; const t=d.players[i]; d.players[i]=d.players[k]; d.players[k]=t; break; }
     case 'delP': { const i=+b.dataset.i; if(!confirm2('dp-'+d.players[i].id,'もう一度')) return; d.players.splice(i,1); d.pi=Math.max(0,Math.min(d.pi||0,d.players.length-1)); break; }
-    case 'copy': { const txt='【空手 採点データ】'+JSON.stringify({tie:S.tie,divs:S.divs}), msg=document.getElementById('copyMsg'), ta=document.getElementById('restore');
+    case 'copy': { const txt='【空手 採点データ】'+JSON.stringify({title:S.title||'',tie:S.tie,divs:S.divs}), msg=document.getElementById('copyMsg'), ta=document.getElementById('restore');
       const fallback=()=>{ ta.value=txt; ta.focus(); ta.select(); msg.textContent='下の欄に出しました。全部選んでコピーしてください。'; };
       try{ navigator.clipboard.writeText(txt).then(()=>{ msg.textContent='写しました。LINEやメモ帳に貼ってください。'; },fallback); }catch(err){ fallback(); }
       return; }
     case 'merge': case 'restore': { const msg=document.getElementById('mergeMsg'), o=readPasted();
       if(!o){ msg.textContent='貼ったデータが読めませんでした。送られてきた文を最初から最後まで全部貼ってください。'; return; }
-      if(a==='restore'){ if(!confirm2('restoreBtn','もう一度押すと入れ替えます')) return; S.divs=o.divs; S.tie=o.tie||S.tie; S.cur=0; save(); render(); document.getElementById('mergeMsg').textContent='入れ替えました（区分'+o.divs.length+'つ）。'; return; }
-      const r=mergeIn(o); save(); render();
+      if(a==='restore'){ if(!confirm2('restoreBtn','もう一度押すと入れ替えます')) return; S.divs=o.divs; S.tie=o.tie||S.tie; S.title=o.title||S.title||''; S.cur=0; save(); render(); document.getElementById('mergeMsg').textContent='入れ替えました（区分'+o.divs.length+'つ）。'; return; }
+      const r=mergeIn(o); if(!S.title&&o.title) S.title=String(o.title); save(); render();
       document.getElementById('mergeMsg').textContent=`取り込みました。新しい区分 ${r.addD}つ、新しい選手 ${r.addP}人、点を更新した選手 ${r.upd}人。`+(r.diff?` うち ${r.diff}人は、こちらの点と違ったので送られてきた点にしました。`:'');
       return; }
     case 'wipe': if(!confirm2('wipeBtn','もう一度押すと全部消します')) return; S.divs=[]; S.cur=0; break;
@@ -568,11 +575,16 @@ document.addEventListener('change',e=>{
   if(t.id==='divSel'){ S.cur=+t.value; save(); render(); }
   else if(t.id==='pSel'){ d.pi=+t.value; save(); render(); }
   else if(t.name==='tie'){ S.tie=t.value; save(); }
+  else if(t.id==='fileIn'&&t.files&&t.files[0]){ const fr=new FileReader(), msg=document.getElementById('mergeMsg');
+    fr.onload=()=>{ document.getElementById('restore').value=String(fr.result||''); msg.textContent='ファイルを読み込みました。初めて入れるときは「置き換える」、今のデータに足すときは「取り込む」を押してください。'; };
+    fr.onerror=()=>{ msg.textContent='ファイルを読めませんでした。'; };
+    fr.readAsText(t.files[0]); t.value=''; }
   else if(t.dataset.kata){ const k=t.dataset.kata; S.kataOff=S.kataOff.filter(x=>x!==k); if(!t.checked) S.kataOff.push(k); save(); render(); }
 });
 document.addEventListener('input',e=>{
   const t=e.target, d=div(), p=player(d);
   if(t.id==='pNo') p.no=t.value; else if(t.id==='pName') p.name=t.value; else if(t.id==='pTeam') p.team=t.value; else if(t.id==='pMemo') p.memo=t.value;
+  else if(t.id==='tTitle'){ S.title=t.value; document.getElementById('ttl').textContent=t.value; }
   else if(t.dataset.div!=null) S.divs[+t.dataset.div].name=t.value;
   else if(t.dataset.pf) d.players[+t.dataset.pi][t.dataset.pf]=t.value;
   else return;
