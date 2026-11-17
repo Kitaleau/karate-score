@@ -43,6 +43,8 @@ h1{font-family:var(--display);font-size:1.3rem;margin:0;letter-spacing:.04em}
 .ttl{width:100%;font-size:.95rem;font-weight:700;margin:2px 0 0}
 .ttl:empty{display:none}
 .filebtn{display:inline-flex;align-items:center;cursor:pointer}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:calc(100% - 32px);background:#222;color:#fff;padding:12px 16px;border-radius:10px;font-size:.95rem;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.toast[hidden]{display:none}
 .saved.bad{color:var(--warn);font-weight:700}
 
 .tabs{display:grid;grid-template-columns:repeat(5,1fr);position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
@@ -431,8 +433,8 @@ function openBig(){
 }
 
 /* 送られてきたデータの読み取りと取り込み */
-function readPasted(){
-  const t=document.getElementById('restore').value, a=t.indexOf('{'), b=t.lastIndexOf('}');
+function readPasted(src){
+  const t=src!=null?src:document.getElementById('restore').value, a=t.indexOf('{'), b=t.lastIndexOf('}');
   if(a<0||b<a) return null;
   try{ const o=JSON.parse(t.slice(a,b+1)); if(!o||!Array.isArray(o.divs)) return null;
     o.divs.forEach(d=>{ d.id=d.id||uid(); d.name=String(d.name||''); d.judges=[3,5,7].includes(d.judges)?d.judges:7; d.base=typeof d.base==='number'?d.base:70; d.pi=0;
@@ -598,6 +600,28 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='Escape'){ PAD.hidden=true; render(); }
 });
 save(); render();
+
+/* 大会専用のリンク（#のあとが鍵）で開いたら、暗号にした大会データを読み込む */
+function toast(msg){ let el=document.getElementById('toast'); if(!el){ el=document.createElement('div'); el.id='toast'; el.className='toast'; document.body.appendChild(el); }
+  el.textContent=msg; el.hidden=false; clearTimeout(el._t); el._t=setTimeout(()=>{ el.hidden=true; },6000); }
+async function loadTaikai(){
+  const key=decodeURIComponent(location.hash.slice(1)).trim(); if(!key||!(window.crypto&&crypto.subtle)) return;
+  let enc; try{ enc=await (await fetch('taikai.enc.json',{cache:'no-cache'})).json(); }catch(e){ return; }
+  if(!enc||!enc.salt||S.dataTag===enc.salt) return;
+  toast('大会データを読み込んでいます…');
+  const b=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+  let text;
+  try{ const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(key),'PBKDF2',false,['deriveKey']);
+    const k=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b(enc.salt),iterations:enc.iter,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
+    text=new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b(enc.iv)},k,b(enc.ct)));
+  }catch(e){ toast('リンクの鍵が違うため、大会データを読めませんでした。'); return; }
+  const o=readPasted(text); if(!o){ toast('大会データを読めませんでした。'); return; }
+  const onlySample=S.divs.every(d=>/^例）/.test(d.name));
+  if(onlySample){ S.divs=o.divs; S.cur=0; } else mergeIn(o);
+  S.title=o.title||S.title; S.tie=o.tie||S.tie; S.dataTag=enc.salt; save(); render();
+  toast(`大会データを読み込みました（${o.divs.length}試合・${o.divs.reduce((a,d)=>a+d.players.length,0)}人）`);
+}
+loadTaikai(); window.addEventListener('hashchange',loadTaikai);
 if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 </script>
