@@ -214,18 +214,11 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const f=t=>(t/10).toFixed(1);
 const newP=()=>({id:uid(),no:'',name:'',team:'',memo:'',s:Array(7).fill(null)});
 
-function sample(){
-  const P=(no,name,team,s)=>({id:uid(),no,name,team,memo:'',s:s.concat(Array(7-s.length).fill(null))});
-  return {tie:'min',view:'score',cur:0,divs:[{id:uid(),name:'例）小学1・2年 男子',judges:7,base:70,pi:0,players:[
-    P('1','例）選手A','例）○○支部',[72,71,73,70,72,71,72]),
-    P('2','例）選手B','例）△△支部',[74,73,74,72,73,75,73]),
-    P('3','例）選手C','例）○○支部',[71,72,72,71,72,69,73]),
-    P('4','例）選手D','例）□□支部',[70,71])
-  ]}]};
-}
 let S, canSave=true;
 try{ const raw=localStorage.getItem(KEY); S=raw?JSON.parse(raw):null; }catch(e){ S=null; canSave=false; }
-if(!S||!Array.isArray(S.divs)) S=sample();
+if(!S||!Array.isArray(S.divs)) S={tie:'min',view:'score',cur:0,divs:[]};
+// 以前の版で入れていた見本（例））の区分は消す
+S.divs=S.divs.filter(d=>d.name!=='例）小学1・2年 男子'); S.cur=Math.max(0,Math.min(S.cur||0,S.divs.length-1));
 S.timer=S.timer||{dur:120000,warn:30000};
 S.kataOff=Array.isArray(S.kataOff)?S.kataOff:[];
 function save(){
@@ -356,8 +349,7 @@ function viewSetup(){
     <div id="mergeMsg" class="note" style="font-weight:700"></div>
     <div class="row"><button class="btn danger" data-a="wipe" id="wipeBtn">全部消して最初から</button></div></div>
   <div class="panel"><h2>ホーム画面に追加する</h2>
-    <div class="note">iPhone：Safariでこのページを開き、下の共有ボタン（四角から上向きの矢印）→「ホーム画面に追加」。Android：Chromeの右上の︙→「ホーム画面に追加」。一度開いておけば、電波がなくても動きます。</div></div>
-  <div class="note example">最初に入っている「例）」の区分と選手は見本です。区分の「削除」で消せます。</div>`;
+    <div class="note">iPhone：Safariでこのページを開き、下の共有ボタン（四角から上向きの矢印）→「ホーム画面に追加」。Android：Chromeの右上の︙→「ホーム画面に追加」。一度開いておけば、電波がなくても動きます。</div></div>`;
   return h;
 }
 
