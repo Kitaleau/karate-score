@@ -128,6 +128,12 @@ select.grow,input.grow{flex:1}
 .bkbar{border:2px solid var(--link);border-radius:10px;padding:8px 10px;margin:8px 0;font-size:.9rem}
 .bkbar .row{margin-top:6px;gap:6px;flex-wrap:wrap}
 .bkbar .btn{padding:8px 10px;font-size:.85rem}
+.bkchg{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:12px}
+.bkchg h4{margin:12px 0 4px}
+.bkchg .row{gap:6px;flex-wrap:wrap}
+.absrow{margin:6px 0;gap:8px;align-items:center}
+.absent{color:var(--red)}
+.bkside .row{gap:6px;flex-wrap:wrap}
 .pinfo input{border-radius:0;padding:5px 7px;font-size:15px;background:var(--surface)}
 
 .court{background:var(--mat);padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px 16px}
@@ -362,7 +368,7 @@ function viewScore(){
   h+=`<div class="pnav"><button class="arr" data-a="prev" aria-label="前の選手">&lt;</button>
     <select id="pSel" aria-label="選手">${d.players.map((q,i)=>{const cc=calc({s:viewArr(d,q)},d);return `<option value="${i}" ${i===idx?'selected':''}>選手${i+1}${q.name?'　'+esc(q.name):''}${cc?'　'+f(cc.base):''}</option>`}).join('')}</select>
     <button class="arr" data-a="next" aria-label="次の選手">&gt;</button></div>
-  <div class="pinfo"><input type="text" id="pNo" value="${esc(p.no)}" placeholder="番号" aria-label="番号"><input type="text" id="pName" value="${esc(p.name)}" placeholder="氏名" aria-label="氏名"><input type="text" id="pTeam" value="${esc(p.team)}" placeholder="所属" aria-label="所属"></div>`+rndTabs(d,p)+bkBar(d,p,slot);
+  <div class="pinfo"><input type="text" id="pNo" value="${esc(p.no)}" placeholder="番号" aria-label="番号"><input type="text" id="pName" value="${esc(p.name)}" placeholder="氏名" aria-label="氏名"><input type="text" id="pTeam" value="${esc(p.team)}" placeholder="所属" aria-label="所属"></div>`+(d.bk?`<div class="row absrow">${p.absent?'<b class="absent">欠席</b>':''}<button class="pill" data-a="absent">${p.absent?'欠席を取り消す':'欠席にする'}</button></div>`:'')+rndTabs(d,p)+bkBar(d,p,slot);
   const layout=d.judges===7?[1,0,2,3,'M',4,5,'R',6]:d.judges===5?[1,0,2,'B','M','B',3,'R',4]:[1,0,2,'B','M','B','B','R','B'];
   h+=`<div class="court">`+layout.map(x=>{
     if(x==='M') return `<div class="mat" aria-hidden="true"><i></i></div>`;
@@ -533,6 +539,9 @@ function decide(d,path,a,b,sa,sb){
   if(!isKumite(d)){ r.ca=calcS(sa,d); r.cb=calcS(sb,d); }
   const rec=(d.bm&&d.bm[path])||{};
   if(rec.w==='A'||rec.w==='B'){ r.w=rec.w==='A'?a:b; r.manual=true; return r; }
+  // 欠席：相手が不戦勝で進む
+  const xa=!!(pByNo(d,a)||{}).absent, xb=!!(pByNo(d,b)||{}).absent;
+  if(xa!==xb){ r.w=xa?b:a; r.bye=true; return r; }
   if(r.ca&&r.cb){ const c=cmp({c:r.ca},{c:r.cb}); if(c<0) r.w=a; else if(c>0) r.w=b; else r.tie=true; }
   return r;
 }
@@ -590,7 +599,7 @@ function slotStatus(d,p,s){
     let r=i; while(r>0&&cmp(done[r-1],done[i])===0) r--; return `決勝で <b class="num">${r+1}位</b>（採点済み ${done.length}人中）`; }
   const I=selInfo(d,s.path), m=decide(d,s.path,I.a,I.b,I.arrA(false),I.arrB(false)), other=I.a===no?I.b:I.a;
   const vs=other!=null?`相手 ${other} ${pName(d,other)}`:'相手は前の試合の結果待ち';
-  const res=m.w==null?(m.tie?'<b>同点</b>（対戦表で勝ちを選んでください）':'結果待ち'):m.w===no?'<b>勝ち</b>（次の回へ進みます）':'負け';
+  const res=m.bye?(m.w===no?'<b>不戦勝</b>（次の回へ進みます）':'欠席'):m.w==null?(m.tie?'<b>同点</b>（対戦表で勝ちを選んでください）':'結果待ち'):m.w===no?'<b>勝ち</b>（次の回へ進みます）':'負け';
   return `${esc(s.label)}　${esc(vs)}　${res}`;
 }
 /* 対戦表から採点画面へ：押した試合の選手と回を選んで移る */
@@ -616,7 +625,31 @@ function viewBk(){
   if(BKDIV!==d.id){ BKSEL=null; BKDIV=d.id; }
   const h=`<div class="panel"><h2>対戦表</h2><div class="row">${divSelect('divSel')}</div>`;
   if(!d.bk) return h+'<div class="note">この試合には、対戦表（組み合わせ）が入っていません。</div></div>';
-  return h+`<div id="bkEd"></div><div id="bkBody"></div></div>`;
+  return h+`<div id="bkEd"></div><div id="bkBody"></div>${chgHtml(d)}</div>`;
+}
+/* 組み合わせを変える：欠席・差し替え・追加（11/23 CEO回答A） */
+let CHGOPEN=false;
+const treeNos=d=>{ const bk=d.bk; if(!bk||bk.type==='rr') return d.players.map(p=>String(p.no)); const L=n=>Array.isArray(n)?n.flatMap(L):[String(n)]; return L(bk.type==='box'?bk.entries:bk.tree); };
+function mapLeaf(n,no,f){ if(!Array.isArray(n)) return String(n)===no?f(String(n)):n; return [mapLeaf(n[0],no,f),mapLeaf(n[1],no,f)]; }
+function bkReplaceLeaf(d,no,f){ const bk=d.bk; if(bk.type==='box') bk.entries=bk.entries.map(e=>mapLeaf(e,no,f)); else bk.tree=mapLeaf(bk.tree,no,f); d.bkv=Date.now(); }
+function chgHtml(d){
+  if(!CHGOPEN) return `<div class="row" style="margin-top:12px"><button class="btn" data-a="chgOpen">組み合わせを変える（欠席・差し替え・追加）</button></div>`;
+  const nos=treeNos(d), opt=f=>nos.map(no=>{ const p=pByNo(d,no); return p&&f(p)?`<option value="${esc(no)}">${esc(no)} ${esc(p.name)}${p.absent?'（欠席）':''}</option>`:''; }).join('');
+  const nextNo=Math.max(0,...d.players.map(p=>parseInt(p.no)||0))+1, rr=d.bk.type==='rr';
+  return `<div class="bkchg"><div class="row" style="justify-content:space-between"><b>組み合わせを変える</b><button class="btn" data-a="chgOpen">閉じる</button></div>
+    <h4>欠席</h4><div class="note">欠席にした選手の相手は、不戦勝で次へ進みます。もう一度押すと取り消せます。</div>
+    <div class="row"><select id="chgAbs" class="grow">${opt(()=>true)}</select><button class="btn" data-a="chgAbs">切り替える</button></div>
+    <h4>新しい選手</h4><div class="pinfo"><input type="text" id="chgNo" value="${nextNo}" placeholder="番号" aria-label="新しい選手の番号"><input type="text" id="chgName" placeholder="氏名" aria-label="新しい選手の氏名"><input type="text" id="chgTeam" placeholder="所属" aria-label="新しい選手の所属"></div>
+    <h4>差し替え</h4><div class="note">${rr?'選んだ選手を欠席にし、新しい選手を総当たりに加えます。':'選んだ選手の枠に、新しい選手を入れます。選んだ選手は欠席になります。'}</div>
+    <div class="row"><select id="chgRep" class="grow">${opt(p=>p.absent)||opt(()=>true)}</select><button class="btn" data-a="chgRep">差し替える</button></div>
+    <h4>追加</h4><div class="note">${rr?'新しい選手を総当たりに加えます。':'選んだ選手と新しい選手の試合を1つ足します（選んだ選手は、この試合に勝つと元の枠へ進みます）。'}</div>
+    <div class="row">${rr?'':`<select id="chgAdd" class="grow">${opt(p=>!p.absent)}</select>`}<button class="btn" data-a="chgAdd">追加する</button></div></div>`;
+}
+function readNewPlayer(d){
+  const no=document.getElementById('chgNo').value.trim(), name=document.getElementById('chgName').value.trim(), team=document.getElementById('chgTeam').value.trim();
+  if(!no||!name){ toast('新しい選手の番号と氏名を入れてください。'); return null; }
+  if(d.players.some(p=>String(p.no)===no)){ toast('その番号は、ほかの選手が使っています。'); return null; }
+  const q=newP(); q.no=no; q.name=name; q.team=team; return q;
 }
 function drawBk(withEd){
   const d=div(); if(!d||!d.bk) return;
@@ -631,7 +664,8 @@ function edHtml(d){
   const side=(k,no,arr)=>{ const p=pByNo(d,no);
     const ins=isKumite(d)?'':`<div class="bkin">${Array.from({length:d.judges},(_,j)=>`<input type="text" inputmode="decimal" autocomplete="off" data-bks="${k}" data-j="${j}" value="${arr&&arr[j]!=null?f(arr[j]):''}" placeholder="${j===0?'主':j}" aria-label="${J_NAMES[j]}">`).join('')}</div><div class="bkpt" id="bkpt${k}"></div>`;
     const win=I.single?'':`<button class="btn" data-a="bkWin" data-w="${k}">${isKumite(d)?'この選手の勝ち':'この選手を勝ちにする'}</button>`;
-    return `<div class="bkside"><div class="bkname">${esc(no)} ${esc(p?p.name:'')}<small>${esc(p?p.team:'')}</small></div>${ins}${win}</div>`; };
+    const ab=p?`<button class="btn" data-a="absentNo" data-no="${esc(no)}">${p.absent?'欠席を取り消す':'欠席にする'}</button>`:'';
+    return `<div class="bkside"><div class="bkname">${esc(no)} ${esc(p?p.name:'')}${p&&p.absent?'（欠席）':''}<small>${esc(p?p.team:'')}</small></div>${ins}<div class="row">${win}${ab}</div></div>`; };
   return `<div class="bked"><b>${esc(I.title)}</b>${side('A',I.a,I.arrA(false))}${I.single?'':side('B',I.b,I.arrB(false))}
     <div id="bkRes" class="bkres"></div><div class="row">${I.single?'':'<button class="btn" data-a="bkWin" data-w="">勝ちの指定を消す</button>'}<button class="btn" data-a="bkClose">閉じる</button></div>
     ${isKumite(d)||I.single||I.path[0]==='R'?'':'<div class="note">1回目の演武の点は、採点画面の点と同じものです。</div>'}</div>`;
@@ -642,7 +676,7 @@ function drawBkRes(d){
   const ca=calcS(I.arrA(false),d), pa=document.getElementById('bkptA'); if(pa) pa.textContent=ca?'得点 '+f(ca.base):'';
   if(I.single){ el.textContent=ca?'得点 '+f(ca.base):'点を入れてください。'; return; }
   const m=decide(d,I.path,I.a,I.b,I.arrA(false),I.arrB(false)), pb=document.getElementById('bkptB'); if(pb) pb.textContent=m.cb?'得点 '+f(m.cb.base):'';
-  el.textContent=m.w!=null?`勝ち：${m.w} ${pName(d,m.w)}${m.manual?'（指定）':''}`:m.tie?'同点です。勝った選手を押してください。':isKumite(d)?'勝った選手を押してください。':'両方の点を入れてください。';
+  el.textContent=m.w!=null?`${m.bye?'不戦勝':'勝ち'}：${m.w} ${pName(d,m.w)}${m.manual?'（指定）':''}`:m.tie?'同点です。勝った選手を押してください。':isKumite(d)?'勝った選手を押してください。':'両方の点を入れてください。';
 }
 function bodyHtml(d){
   const leg='<div class="bkleg"><b class="w">赤い線</b>＝勝ち上がり　<b class="r">青い線</b>＝結果を待っている試合　灰色の名前＝敗退</div>';
@@ -679,7 +713,7 @@ function bkSvg(d){
     if(champ!=null) T.push(`<text x="${ox+4}" y="${o.y+4}" class="nm ch">優勝 ${esc(pName(d,champ))}</text>`);
     W=ox+130;
   }
-  const N=names.map(r=>`<text x="2" y="${r.y+4}" class="nm${lost.has(r.no)?' out':''}${champ===r.no?' ch':''}">${esc(r.no)} ${esc(short(pName(d,r.no)))}</text>`);
+  const N=names.map(r=>`<text x="2" y="${r.y+4}" class="nm${lost.has(r.no)?' out':''}${champ===r.no?' ch':''}">${esc(r.no)} ${esc(short(pName(d,r.no)))}${(pByNo(d,r.no)||{}).absent?'（欠席）':''}</text>`);
   const Hh=row*RH+6;
   return `<svg class="bksvg" width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}" xmlns="http://www.w3.org/2000/svg">${N.join('')}${L.join('')}${T.join('')}${H.join('')}</svg>`;
 }
@@ -694,7 +728,7 @@ function rrHtml(d){
   for(let i=0;i<P.length;i++) for(let j=i+1;j<P.length;j++){
     const path='R'+i+'-'+j, I=selInfo(d,path), m=decide(d,path,I.a,I.b,I.arrA(false),I.arrB(false));
     if(m.w!=null){ wins[m.w===I.a?i:j]++; done[i]++; done[j]++; }
-    rows+=`<button class="srow${BKSEL===path?' sel':''}" data-a="bkPick" data-s="${path}"><span>${esc(P[i].no)} ${esc(P[i].name)}　対　${esc(P[j].no)} ${esc(P[j].name)}</span><span class="no">${m.w!=null?'勝ち：<b>'+esc(pName(d,m.w))+'</b>':m.tie?'同点':'未'}</span></button>`; }
+    rows+=`<button class="srow${BKSEL===path?' sel':''}" data-a="bkPick" data-s="${path}"><span>${esc(P[i].no)} ${esc(P[i].name)}　対　${esc(P[j].no)} ${esc(P[j].name)}</span><span class="no">${m.w!=null?(m.bye?'不戦勝：':'勝ち：')+'<b>'+esc(pName(d,m.w))+'</b>':m.tie?'同点':'未'}</span></button>`; }
   const order=P.map((p,i)=>i).sort((x,y)=>wins[y]-wins[x]);
   return `<h3>対戦（${P.length*(P.length-1)/2}試合）</h3>${rows}<h3>勝ち数</h3><table class="bktbl"><tr><th>番号</th><th>氏名</th><th>勝ち</th><th>終わった試合</th></tr>${order.map(i=>`<tr><td>${esc(P[i].no)}</td><td>${esc(P[i].name)}</td><td><b>${wins[i]}</b></td><td>${done[i]}／${P.length-1}</td></tr>`).join('')}</table>`;
 }
@@ -715,7 +749,8 @@ function mergeIn(o){
     const ld=S.divs.find(x=>x.id===id.id)||S.divs.find(x=>x.name.trim()===id.name.trim());
     if(!ld){ S.divs.push(id); r.addD++; r.addP+=id.players.length; return; }
     if(id.sched) ld.sched=id.sched;
-    if(id.bk&&!ld.bk) ld.bk=id.bk;
+    // 組み合わせは、新しく変えられた方（bkv が大きい方）を使う
+    if(id.bk&&(!ld.bk||(id.bkv||0)>(ld.bkv||0))){ ld.bk=id.bk; ld.bkv=id.bkv||0; }
     if(id.bm){ ld.bm=ld.bm||{}; for(const k in id.bm){ const ir=id.bm[k], lr=ld.bm[k]||(ld.bm[k]={});
       if(ir.w&&!lr.w) lr.w=ir.w;
       ['a','b'].forEach(s=>{ if(!ir[s]) return; if(!lr[s]||lr[s].no!==ir[s].no){ if(!lr[s]) lr[s]=ir[s]; return; }
@@ -726,6 +761,7 @@ function mergeIn(o){
       let ch=false, df=false;
       for(let j=0;j<7;j++) if(ip.s[j]!=null&&ip.s[j]!==lp.s[j]){ if(lp.s[j]!=null) df=true; lp.s[j]=ip.s[j]; ch=true; }
       if(!lp.team&&ip.team) lp.team=ip.team;
+      if(ip.absent) lp.absent=true;
       if(!lp.kana&&ip.kana) lp.kana=ip.kana;
       if(!lp.memo&&ip.memo) lp.memo=ip.memo;
       if(ch) r.upd++; if(df) r.diff++;
@@ -797,6 +833,17 @@ document.addEventListener('click',e=>{
     case 'rnd': RND[p.id]=b.dataset.k; break;
     case 'bkOpp': { if(!BKFROM) return; const I=selInfo(d,BKFROM.sel), other=I.a===String(p.no)?I.b:I.a; if(other==null||!openInScore(d,BKFROM.sel,other)) return; window.scrollTo(0,0); break; }
     case 'bkWinP': { if(!BKFROM) return; const I=selInfo(d,BKFROM.sel); bmRec(d,BKFROM.sel).w=I.a===String(p.no)?'A':'B'; break; }
+    case 'absent': p.absent=!p.absent; break;
+    case 'absentNo': { const q=pByNo(d,b.dataset.no); if(!q) return; q.absent=!q.absent; break; }
+    case 'chgOpen': CHGOPEN=!CHGOPEN; break;
+    case 'chgAbs': { const q=pByNo(d,document.getElementById('chgAbs').value); if(!q) return; q.absent=!q.absent; toast(`${q.no} ${q.name}：${q.absent?'欠席にしました':'欠席を取り消しました'}`); break; }
+    case 'chgRep': { const old=pByNo(d,document.getElementById('chgRep').value), q=readNewPlayer(d); if(!old||!q) return;
+      d.players.push(q); old.absent=true; if(d.bk.type!=='rr') bkReplaceLeaf(d,String(old.no),()=>String(q.no)); else d.bkv=Date.now();
+      toast(`${old.no} ${old.name} の枠に ${q.no} ${q.name} を入れました`); break; }
+    case 'chgAdd': { const q=readNewPlayer(d); if(!q) return;
+      if(d.bk.type==='rr'){ d.players.push(q); d.bkv=Date.now(); toast(`${q.no} ${q.name} を総当たりに加えました`); break; }
+      const t=pByNo(d,document.getElementById('chgAdd').value); if(!t) return;
+      d.players.push(q); bkReplaceLeaf(d,String(t.no),x=>[x,String(q.no)]); toast(`${t.no} ${t.name} と ${q.no} ${q.name} の試合を足しました`); break; }
     case 'bkWinClr': { if(!BKFROM) return; const r=d.bm&&d.bm[BKFROM.sel]; if(r) delete r.w; break; }
     case 'bkBack': BKFROM=null; S.view='bk'; break;
     case 'bkWin': { if(!BKSEL) return; const rec=bmRec(d,BKSEL); if(b.dataset.w) rec.w=b.dataset.w; else delete rec.w; break; }
