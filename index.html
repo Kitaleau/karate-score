@@ -47,8 +47,18 @@ h1{font-family:var(--display);font-size:1.3rem;margin:0;letter-spacing:.04em}
 .toast[hidden]{display:none}
 .saved.bad{color:var(--warn);font-weight:700}
 
-.tabs{display:grid;grid-template-columns:repeat(5,1fr);position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
-.tabs button{padding:10px 2px;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--link);font-size:.85rem;white-space:nowrap}
+.tabs{display:grid;grid-template-columns:repeat(6,1fr);position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.tabs button{padding:10px 0;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--link);font-size:.85rem;white-space:nowrap;letter-spacing:-.02em}
+@media (max-width:520px){.tabs button{font-size:.72rem}}
+.sq{width:100%;font-size:1.1rem;padding:10px 12px}
+.sres{display:grid;gap:10px;margin-top:10px}
+.scard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}
+.scard h3{margin:0 0 6px;font-size:1.05rem}
+.scard h3 small{font-weight:400;color:var(--muted);margin-left:6px}
+.srow{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;width:100%;text-align:left;border:0;border-top:1px dashed var(--line);background:transparent;padding:8px 0;color:inherit;font:inherit}
+.srow:first-of-type{border-top:0}
+.srow .when{font-weight:700;color:var(--red);white-space:nowrap}
+.srow .div{grid-column:1/-1;font-size:.85rem;color:var(--muted)}
 .tabs button[aria-pressed="true"]{border-bottom-color:var(--link);color:var(--ink);font-weight:700}
 
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
@@ -191,6 +201,7 @@ h2{font-size:1rem;margin:0}
   <nav class="tabs" aria-label="画面の切り替え">
     <button data-a="view" data-v="score">採点</button>
     <button data-a="view" data-v="rank">順位表</button>
+    <button data-a="view" data-v="search">選手検索</button>
     <button data-a="view" data-v="timer">タイマー</button>
     <button data-a="view" data-v="kata">形カード</button>
     <button data-a="view" data-v="setup">区分・選手</button>
@@ -263,7 +274,32 @@ function render(){
   else if(S.view==='setup') M.innerHTML=viewSetup();
   else if(S.view==='timer') { M.innerHTML=viewTimer(); drawTimer(); }
   else if(S.view==='kata') M.innerHTML=viewKata();
+  else if(S.view==='search') { M.innerHTML=viewSearch(); drawSearch(); }
   else M.innerHTML=viewScore();
+}
+/* 選手検索：名前の一部で探し、時間・コート・試合・番号を出す */
+let SQ='';
+function viewSearch(){
+  return `<div class="panel"><h2>選手検索</h2><input type="search" id="sq" class="sq" value="${esc(SQ)}" placeholder="名前の一部（例：北）" aria-label="選手の名前の一部" autocomplete="off">
+    <div class="note">名字・名前のどこか一部を入れてください。行を押すと、その選手の採点の画面に移ります。</div><div id="sres" class="sres"></div></div>`;
+}
+function drawSearch(){
+  const el=document.getElementById('sres'); if(!el) return;
+  const q=SQ.replace(/[\s　]/g,'');
+  if(!q){ el.innerHTML=''; return; }
+  const groups=new Map();
+  S.divs.forEach((d,i)=>d.players.forEach((p,j)=>{
+    if(!p.name.replace(/[\s　]/g,'').includes(q)) return;
+    const k=p.name.replace(/[\s　]/g,'')+'|'+(p.team||'');
+    if(!groups.has(k)) groups.set(k,{name:p.name,team:p.team,rows:[]});
+    groups.get(k).rows.push({d,i,j,p});
+  }));
+  if(!groups.size){ el.innerHTML='<div class="note">見つかりませんでした。</div>'; return; }
+  const rank=x=>x.d.sched?(x.d.sched.part==='午前'?0:1)*1000+x.d.sched.order*10+x.d.sched.court/10:9999;
+  el.innerHTML=[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(g=>`<div class="scard"><h3>${esc(g.name)}<small>${esc(g.team||'')}</small></h3>`+
+    g.rows.sort((a,b)=>rank(a)-rank(b)).map(x=>{ const s=x.d.sched;
+      const when=s?`${s.part} ${s.start}〜・${s.court}コート・${s.order}番目の試合`:'時間・コートは未登録';
+      return `<button class="srow" data-a="goP" data-i="${x.i}" data-j="${x.j}"><span class="when">${esc(when)}</span><span>番号 <b>${esc(x.p.no)}</b></span><span class="div">${esc(x.d.name)}</span></button>`; }).join('')+`</div>`).join('');
 }
 function divSelect(id){
   return `<select id="${id}" class="grow" aria-label="区分">${S.divs.map((d,i)=>`<option value="${i}" ${i===S.cur?'selected':''}>${esc(d.name)}（${d.players.length}人）</option>`).join('')}</select>`;
@@ -439,6 +475,7 @@ function mergeIn(o){
   o.divs.forEach(id=>{
     const ld=S.divs.find(x=>x.id===id.id)||S.divs.find(x=>x.name.trim()===id.name.trim());
     if(!ld){ S.divs.push(id); r.addD++; r.addP+=id.players.length; return; }
+    if(id.sched) ld.sched=id.sched;
     id.players.forEach(ip=>{
       const lp=ld.players.find(x=>x.id===ip.id)||ld.players.find(x=>(x.no||x.name)&&x.no.trim()===ip.no.trim()&&x.name.trim()===ip.name.trim());
       if(!lp){ ld.players.push(ip); r.addP++; return; }
@@ -505,6 +542,7 @@ document.addEventListener('click',e=>{
   const a=b.dataset.a, d=div(), p=player(d);
   switch(a){
     case 'view': S.view=b.dataset.v; break;
+    case 'goP': { const i=+b.dataset.i, j=+b.dataset.j; if(!S.divs[i]) return; S.cur=i; S.divs[i].pi=j; S.view='score'; save(); render(); window.scrollTo(0,0); return; }
     case 'judges': d.judges=d.judges===7?5:d.judges===5?3:7; break;
     case 'base': d.base=Math.max(0,Math.min(100,d.base+ +b.dataset.d)); break;
     case 'prev': d.pi=Math.max(0,(d.pi||0)-1); break;
@@ -578,6 +616,7 @@ document.addEventListener('change',e=>{
 document.addEventListener('input',e=>{
   const t=e.target, d=div(), p=player(d);
   if(t.id==='pNo') p.no=t.value; else if(t.id==='pName') p.name=t.value; else if(t.id==='pTeam') p.team=t.value; else if(t.id==='pMemo') p.memo=t.value;
+  else if(t.id==='sq'){ SQ=t.value; drawSearch(); return; }
   else if(t.id==='tTitle'){ S.title=t.value; document.getElementById('ttl').textContent=t.value; }
   else if(t.dataset.div!=null) S.divs[+t.dataset.div].name=t.value;
   else if(t.dataset.pf) d.players[+t.dataset.pi][t.dataset.pf]=t.value;
