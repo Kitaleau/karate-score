@@ -47,9 +47,10 @@ h1{font-family:var(--display);font-size:1.3rem;margin:0;letter-spacing:.04em}
 .toast[hidden]{display:none}
 .saved.bad{color:var(--warn);font-weight:700}
 
-.tabs{display:grid;grid-template-columns:repeat(6,1fr);position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.tabs{display:grid;grid-template-columns:repeat(7,1fr);position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
 .tabs button{padding:10px 0;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--link);font-size:.85rem;white-space:nowrap;letter-spacing:-.02em}
 @media (max-width:520px){.tabs button{font-size:.72rem}}
+@media (max-width:420px){.tabs button{font-size:.64rem;letter-spacing:-.06em}}
 .sq{width:100%;font-size:1.1rem;padding:10px 12px}
 .sres{display:grid;gap:10px;margin-top:10px}
 .scard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}
@@ -63,6 +64,34 @@ h1{font-family:var(--display);font-size:1.3rem;margin:0;letter-spacing:.04em}
 .srow .when{font-weight:700;color:var(--red)}
 .srow .div{grid-column:1/-1;font-size:.85rem;color:var(--muted)}
 .tabs button[aria-pressed="true"]{border-bottom-color:var(--link);color:var(--ink);font-weight:700}
+/* 対戦表 */
+.bkwrap{overflow-x:auto;margin:8px 0;-webkit-overflow-scrolling:touch}
+.bksvg{display:block}
+.bksvg line{stroke:var(--drop);stroke-width:1.5}
+.bksvg line.w{stroke:var(--red);stroke-width:3.5}
+.bksvg line.r{stroke:var(--link);stroke-width:3.5}
+.bksvg .nm{font-size:13px;fill:var(--ink);font-family:var(--font)}
+.bksvg .nm.out{fill:var(--drop)}
+.bksvg .nm.ch{font-weight:700;fill:var(--red)}
+.bksvg .sc{font-size:10px;text-anchor:end;fill:var(--ink);font-family:var(--num)}
+.bksvg .tie{font-size:10px;fill:var(--warn);font-weight:700}
+.bksvg .fin{fill:var(--soft);stroke:var(--drop)}
+.bksvg .fint{font-size:12px;font-weight:700;fill:var(--ink);text-anchor:middle}
+.bksvg .hit{fill:transparent;cursor:pointer}
+.bksvg .hit.sel{fill:rgba(26,124,255,.18);stroke:var(--link)}
+.bkleg{font-size:.8rem;color:var(--muted)}
+.bkleg b.w{color:var(--red)} .bkleg b.r{color:var(--link)}
+.bked{border:2px solid var(--link);border-radius:10px;padding:10px;margin:8px 0}
+.bkside{margin:10px 0;padding-top:8px;border-top:1px dashed var(--line)}
+.bkname{font-weight:700}
+.bkname small{color:var(--muted);margin-left:6px;font-weight:400}
+.bkin{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:6px 0}
+.bkin input{width:100%;min-width:0;font-size:1.05rem;text-align:center;padding:8px 0;font-family:var(--num);border:1px solid var(--line);border-radius:6px}
+.bkpt{font-family:var(--num);margin-bottom:6px}
+.bkres{font-weight:700;margin:8px 0;color:var(--red)}
+.srow.sel{outline:2px solid var(--link)}
+.bktbl{width:100%;border-collapse:collapse;margin-top:6px}
+.bktbl td,.bktbl th{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left}
 
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -204,6 +233,7 @@ h2{font-size:1rem;margin:0}
   <nav class="tabs" aria-label="画面の切り替え">
     <button data-a="view" data-v="score">採点</button>
     <button data-a="view" data-v="rank">順位表</button>
+    <button data-a="view" data-v="bk">対戦表</button>
     <button data-a="view" data-v="search">選手検索</button>
     <button data-a="view" data-v="timer">タイマー</button>
     <button data-a="view" data-v="kata">形カード</button>
@@ -278,6 +308,7 @@ function render(){
   else if(S.view==='timer') { M.innerHTML=viewTimer(); drawTimer(); }
   else if(S.view==='kata') M.innerHTML=viewKata();
   else if(S.view==='search') { M.innerHTML=viewSearch(); drawSearch(); }
+  else if(S.view==='bk') { M.innerHTML=viewBk(); drawBk(); }
   else M.innerHTML=viewScore();
 }
 /* 選手検索：名前の一部で探し、時間・コート・試合・番号を出す */
@@ -465,6 +496,139 @@ function openBig(){
   BIG.hidden=false;
 }
 
+/* 対戦表：試合表の組み合わせ（d.bk）に、対戦ごとの点（d.bm）や勝ちを入れ、勝ち上がりを見る
+   d.bk = {type:'elim', tree} 勝ち抜き ／ {type:'box', entries:[8組]} 勝ち抜きの後、決勝8人を点数で順位 ／ {type:'rr'} 総当たり
+   木は [左,右] の入れ子、葉は選手の番号。選手の最初の演武の点は、採点画面の点（p.s）をそのまま使う */
+let BKSEL=null, BKDIV=null;
+const isKumite=d=>/組手/.test(d.name);
+const pByNo=(d,no)=>no==null?null:(d.players.find(p=>String(p.no)===String(no))||null);
+const pName=(d,no)=>{ const p=pByNo(d,no); return p?p.name:''; };
+// 表の中の名前は幅に収まるように短くする（ローマ字は文字が細いので長めに）
+const short=s=>{ const lim=/^[\x20-\x7e]+$/.test(s)?13:7; return s.length>lim?s.slice(0,lim-1)+'…':s; };
+const ht=n=>Array.isArray(n)?1+Math.max(ht(n[0]),ht(n[1])):0;
+const calcS=(s,d)=>s?calc({s},d):null;
+function parseScore(v){ v=String(v).trim(); if(!v) return null; const n=parseFloat(v); if(isNaN(n)) return null;
+  const t=v.includes('.')?Math.round(n*10):(n<=10?n*10:Math.round(n)); return Math.max(0,Math.min(100,t)); }
+function bmRec(d,path){ d.bm=d.bm||{}; return d.bm[path]||(d.bm[path]={}); }
+function recArr(d,path,k,no,create){ if(no==null) return null; let rec=d.bm&&d.bm[path];
+  if(!rec){ if(!create) return null; rec=bmRec(d,path); }
+  if(!rec[k]||rec[k].no!==String(no)){ if(!create) return null; rec[k]={no:String(no),s:Array(7).fill(null)}; }
+  return rec[k].s; }
+function slotArr(d,child,path,k,no,create){ if(no==null) return null;
+  if(!Array.isArray(child)){ const p=pByNo(d,no); return p?p.s:null; } return recArr(d,path,k,no,create); }
+function decide(d,path,a,b,sa,sb){
+  const r={a,b,w:null,ca:null,cb:null,tie:false,manual:false};
+  if(a==null||b==null) return r;
+  if(!isKumite(d)){ r.ca=calcS(sa,d); r.cb=calcS(sb,d); }
+  const rec=(d.bm&&d.bm[path])||{};
+  if(rec.w==='A'||rec.w==='B'){ r.w=rec.w==='A'?a:b; r.manual=true; return r; }
+  if(r.ca&&r.cb){ const c=cmp({c:r.ca},{c:r.cb}); if(c<0) r.w=a; else if(c>0) r.w=b; else r.tie=true; }
+  return r;
+}
+function nodeMatch(d,n,path){ const a=bkRes(d,n[0],path+'0'), b=bkRes(d,n[1],path+'1');
+  return decide(d,path,a,b,slotArr(d,n[0],path,'a',a),slotArr(d,n[1],path,'b',b)); }
+function bkRes(d,n,path){ return Array.isArray(n)?nodeMatch(d,n,path).w:String(n); }
+function nodeAt(d,path){ let n,bits; if(path[0]==='T'){ n=d.bk.tree; bits=path.slice(1); } else { n=d.bk.entries[+path[1]]; bits=path.slice(2); }
+  for(const c of bits) n=n[+c]; return n; }
+function roundName(d,n,path){ if(path==='T') return '決勝'; if(path.length===2&&path[0]==='T') return '準決勝'; return ht(n)+'回戦'; }
+function selInfo(d,sel){
+  if(sel[0]==='F'){ const k=+sel.slice(1), e=d.bk.entries[k], no=bkRes(d,e,'E'+k);
+    return {title:'決勝（8人の点数で順位）', single:true, path:sel, a:no, arrA:c=>slotArr(d,e,sel,'a',no,c)}; }
+  if(sel[0]==='R'){ const ij=sel.slice(1).split('-').map(Number), pa=d.players[ij[0]], pb=d.players[ij[1]], a=pa?String(pa.no):null, b=pb?String(pb.no):null;
+    return {title:'総当たり', path:sel, a, b, arrA:c=>recArr(d,sel,'a',a,c), arrB:c=>recArr(d,sel,'b',b,c)}; }
+  const n=nodeAt(d,sel), a=bkRes(d,n[0],sel+'0'), b=bkRes(d,n[1],sel+'1');
+  return {title:roundName(d,n,sel), path:sel, a, b, arrA:c=>slotArr(d,n[0],sel,'a',a,c), arrB:c=>slotArr(d,n[1],sel,'b',b,c)};
+}
+function finalists(d){ return d.bk.entries.map((e,k)=>{ const no=bkRes(d,e,'E'+k); return {k,no,c:no!=null?calcS(slotArr(d,e,'F'+k,'a',no,false),d):null}; }); }
+
+function viewBk(){
+  const d=div(); if(!d) return '<div class="panel"><p>区分がまだありません。</p></div>';
+  if(BKDIV!==d.id){ BKSEL=null; BKDIV=d.id; }
+  const h=`<div class="panel"><h2>対戦表</h2><div class="row">${divSelect('divSel')}</div>`;
+  if(!d.bk) return h+'<div class="note">この試合には、対戦表（組み合わせ）が入っていません。</div></div>';
+  return h+`<div id="bkEd"></div><div id="bkBody"></div></div>`;
+}
+function drawBk(withEd){
+  const d=div(); if(!d||!d.bk) return;
+  if(withEd!==false){ const e=document.getElementById('bkEd'); if(e) e.innerHTML=edHtml(d); }
+  const b=document.getElementById('bkBody'); if(b) b.innerHTML=bodyHtml(d);
+  drawBkRes(d);
+}
+function edHtml(d){
+  if(!BKSEL) return `<div class="note">${d.bk.type==='rr'?'下の対戦を押すと':'表の縦の線を押すと'}、その試合の${isKumite(d)?'勝ちを入れられます。':'点を入れられます。点の高い選手が、自動で次へ進みます。'}</div>`;
+  const I=selInfo(d,BKSEL);
+  if(I.a==null||(!I.single&&I.b==null)) return `<div class="bked"><b>${esc(I.title)}</b><div class="note">前の試合の結果が、まだ出ていません。</div><button class="btn" data-a="bkClose">閉じる</button></div>`;
+  const side=(k,no,arr)=>{ const p=pByNo(d,no);
+    const ins=isKumite(d)?'':`<div class="bkin">${Array.from({length:d.judges},(_,j)=>`<input type="text" inputmode="decimal" autocomplete="off" data-bks="${k}" data-j="${j}" value="${arr&&arr[j]!=null?f(arr[j]):''}" placeholder="${j===0?'主':j}" aria-label="${J_NAMES[j]}">`).join('')}</div><div class="bkpt" id="bkpt${k}"></div>`;
+    const win=I.single?'':`<button class="btn" data-a="bkWin" data-w="${k}">${isKumite(d)?'この選手の勝ち':'この選手を勝ちにする'}</button>`;
+    return `<div class="bkside"><div class="bkname">${esc(no)} ${esc(p?p.name:'')}<small>${esc(p?p.team:'')}</small></div>${ins}${win}</div>`; };
+  return `<div class="bked"><b>${esc(I.title)}</b>${side('A',I.a,I.arrA(false))}${I.single?'':side('B',I.b,I.arrB(false))}
+    <div id="bkRes" class="bkres"></div><div class="row">${I.single?'':'<button class="btn" data-a="bkWin" data-w="">勝ちの指定を消す</button>'}<button class="btn" data-a="bkClose">閉じる</button></div>
+    ${isKumite(d)||I.single||I.path[0]==='R'?'':'<div class="note">1回目の演武の点は、採点画面の点と同じものです。</div>'}</div>`;
+}
+function drawBkRes(d){
+  const el=document.getElementById('bkRes'); if(!el||!BKSEL) return;
+  const I=selInfo(d,BKSEL); if(I.a==null) return;
+  const ca=calcS(I.arrA(false),d), pa=document.getElementById('bkptA'); if(pa) pa.textContent=ca?'得点 '+f(ca.base):'';
+  if(I.single){ el.textContent=ca?'得点 '+f(ca.base):'点を入れてください。'; return; }
+  const m=decide(d,I.path,I.a,I.b,I.arrA(false),I.arrB(false)), pb=document.getElementById('bkptB'); if(pb) pb.textContent=m.cb?'得点 '+f(m.cb.base):'';
+  el.textContent=m.w!=null?`勝ち：${m.w} ${pName(d,m.w)}${m.manual?'（指定）':''}`:m.tie?'同点です。勝った選手を押してください。':isKumite(d)?'勝った選手を押してください。':'両方の点を入れてください。';
+}
+function bodyHtml(d){
+  const leg='<div class="bkleg"><b class="w">赤い線</b>＝勝ち上がり　<b class="r">青い線</b>＝結果を待っている試合　灰色の名前＝敗退</div>';
+  if(d.bk.type==='rr') return rrHtml(d);
+  return leg+`<div class="bkwrap">${bkSvg(d)}</div>`+(d.bk.type==='box'?finalHtml(d):'');
+}
+function bkSvg(d){
+  const bk=d.bk, box=bk.type==='box', roots=box?bk.entries.map((n,k)=>[n,'E'+k]):[[bk.tree,'T']];
+  const RH=30, NW=128, CW=30, mh=Math.max(...roots.map(r=>ht(r[0])));
+  let row=0; const L=[], T=[], H=[], names=[], lost=new Set();
+  const seg=(x1,y1,x2,y2,c)=>L.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${c?` class="${c}"`:''}/>`);
+  function lay(n,path){
+    if(!Array.isArray(n)){ const y=row++*RH+RH/2; names.push({no:String(n),y}); return {x:NW,y}; }
+    const A=lay(n[0],path+'0'), B=lay(n[1],path+'1'), x=NW+ht(n)*CW, my=(A.y+B.y)/2, m=nodeMatch(d,n,path);
+    const ready=m.a!=null&&m.b!=null&&m.w==null, wa=m.w!=null&&m.w===m.a, wb=m.w!=null&&m.w===m.b;
+    if(m.w!=null) lost.add(wa?m.b:m.a);
+    seg(A.x,A.y,x,A.y,wa?'w':''); seg(B.x,B.y,x,B.y,wb?'w':'');
+    seg(x,A.y,x,my,wa?'w':ready?'r':''); seg(x,my,x,B.y,wb?'w':ready?'r':'');
+    if(m.ca) T.push(`<text x="${x-3}" y="${A.y-4}" class="sc">${f(m.ca.base)}</text>`);
+    if(m.cb) T.push(`<text x="${x-3}" y="${B.y-4}" class="sc">${f(m.cb.base)}</text>`);
+    if(m.tie) T.push(`<text x="${x+4}" y="${my+4}" class="tie">同点</text>`);
+    H.push(`<rect x="${x-13}" y="${A.y-8}" width="26" height="${B.y-A.y+16}" class="hit${BKSEL===path?' sel':''}" data-a="bkPick" data-s="${path}"/>`);
+    return {x,y:my};
+  }
+  const outs=roots.map(([n,p])=>Object.assign(lay(n,p),{w:bkRes(d,n,p)}));
+  const ox=NW+(mh+1)*CW; let champ=null, W;
+  if(box){
+    outs.forEach(o=>seg(o.x,o.y,ox,o.y,o.w!=null?'w':''));
+    const y1=Math.min(...outs.map(o=>o.y))-12, y2=Math.max(...outs.map(o=>o.y))+12;
+    L.push(`<rect x="${ox}" y="${y1}" width="26" height="${y2-y1}" class="fin"/><text x="${ox+13}" y="${(y1+y2)/2-4}" class="fint">決</text><text x="${ox+13}" y="${(y1+y2)/2+12}" class="fint">勝</text>`);
+    W=ox+34;
+  } else {
+    const o=outs[0]; champ=o.w; seg(o.x,o.y,ox,o.y,champ!=null?'w':'');
+    if(champ!=null) T.push(`<text x="${ox+4}" y="${o.y+4}" class="nm ch">優勝 ${esc(pName(d,champ))}</text>`);
+    W=ox+130;
+  }
+  const N=names.map(r=>`<text x="2" y="${r.y+4}" class="nm${lost.has(r.no)?' out':''}${champ===r.no?' ch':''}">${esc(r.no)} ${esc(short(pName(d,r.no)))}</text>`);
+  const Hh=row*RH+6;
+  return `<svg class="bksvg" width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}" xmlns="http://www.w3.org/2000/svg">${N.join('')}${L.join('')}${T.join('')}${H.join('')}</svg>`;
+}
+function finalHtml(d){
+  const F=finalists(d), done=F.filter(x=>x.c).sort(cmp);
+  done.forEach((r,i)=>r.rank=(i>0&&cmp(done[i-1],r)===0)?done[i-1].rank:i+1);
+  const rest=F.filter(x=>!x.c);
+  return `<h3>決勝（8人の点数で順位）</h3>`+[...done,...rest].map(x=>`<button class="srow${BKSEL==='F'+x.k?' sel':''}" data-a="bkPick" data-s="F${x.k}"><span>${x.rank?`<b>${x.rank}位</b>　`:''}${x.no!=null?esc(x.no)+' '+esc(pName(d,x.no)):'（勝ち上がり待ち）'}</span><span class="no">${x.c?'得点 <b>'+f(x.c.base)+'</b>':x.no!=null?'点を入れる':''}</span></button>`).join('');
+}
+function rrHtml(d){
+  const P=d.players, wins=P.map(()=>0), done=P.map(()=>0); let rows='';
+  for(let i=0;i<P.length;i++) for(let j=i+1;j<P.length;j++){
+    const path='R'+i+'-'+j, I=selInfo(d,path), m=decide(d,path,I.a,I.b,I.arrA(false),I.arrB(false));
+    if(m.w!=null){ wins[m.w===I.a?i:j]++; done[i]++; done[j]++; }
+    rows+=`<button class="srow${BKSEL===path?' sel':''}" data-a="bkPick" data-s="${path}"><span>${esc(P[i].no)} ${esc(P[i].name)}　対　${esc(P[j].no)} ${esc(P[j].name)}</span><span class="no">${m.w!=null?'勝ち：<b>'+esc(pName(d,m.w))+'</b>':m.tie?'同点':'未'}</span></button>`; }
+  const order=P.map((p,i)=>i).sort((x,y)=>wins[y]-wins[x]);
+  return `<h3>対戦（${P.length*(P.length-1)/2}試合）</h3>${rows}<h3>勝ち数</h3><table class="bktbl"><tr><th>番号</th><th>氏名</th><th>勝ち</th><th>終わった試合</th></tr>${order.map(i=>`<tr><td>${esc(P[i].no)}</td><td>${esc(P[i].name)}</td><td><b>${wins[i]}</b></td><td>${done[i]}／${P.length-1}</td></tr>`).join('')}</table>`;
+}
+
 /* 送られてきたデータの読み取りと取り込み */
 function readPasted(src){
   const t=src!=null?src:document.getElementById('restore').value, a=t.indexOf('{'), b=t.lastIndexOf('}');
@@ -481,6 +645,11 @@ function mergeIn(o){
     const ld=S.divs.find(x=>x.id===id.id)||S.divs.find(x=>x.name.trim()===id.name.trim());
     if(!ld){ S.divs.push(id); r.addD++; r.addP+=id.players.length; return; }
     if(id.sched) ld.sched=id.sched;
+    if(id.bk&&!ld.bk) ld.bk=id.bk;
+    if(id.bm){ ld.bm=ld.bm||{}; for(const k in id.bm){ const ir=id.bm[k], lr=ld.bm[k]||(ld.bm[k]={});
+      if(ir.w&&!lr.w) lr.w=ir.w;
+      ['a','b'].forEach(s=>{ if(!ir[s]) return; if(!lr[s]||lr[s].no!==ir[s].no){ if(!lr[s]) lr[s]=ir[s]; return; }
+        for(let j=0;j<7;j++) if(ir[s].s[j]!=null) lr[s].s[j]=ir[s].s[j]; }); } }
     id.players.forEach(ip=>{
       const lp=ld.players.find(x=>x.id===ip.id)||ld.players.find(x=>(x.no||x.name)&&x.no.trim()===ip.no.trim()&&x.name.trim()===ip.name.trim());
       if(!lp){ ld.players.push(ip); r.addP++; return; }
@@ -549,6 +718,9 @@ document.addEventListener('click',e=>{
   switch(a){
     case 'view': S.view=b.dataset.v; break;
     case 'goP': { const i=+b.dataset.i, j=+b.dataset.j; if(!S.divs[i]) return; S.cur=i; S.divs[i].pi=j; S.view='score'; save(); render(); window.scrollTo(0,0); return; }
+    case 'bkPick': BKSEL=b.dataset.s; save(); render(); { const e=document.getElementById('bkEd'); if(e) e.scrollIntoView({block:'start'}); } return;
+    case 'bkClose': BKSEL=null; break;
+    case 'bkWin': { if(!BKSEL) return; const rec=bmRec(d,BKSEL); if(b.dataset.w) rec.w=b.dataset.w; else delete rec.w; break; }
     case 'judges': d.judges=d.judges===7?5:d.judges===5?3:7; break;
     case 'base': d.base=Math.max(0,Math.min(100,d.base+ +b.dataset.d)); break;
     case 'prev': d.pi=Math.max(0,(d.pi||0)-1); break;
@@ -623,6 +795,8 @@ document.addEventListener('input',e=>{
   const t=e.target, d=div(), p=player(d);
   if(t.id==='pNo') p.no=t.value; else if(t.id==='pName') p.name=t.value; else if(t.id==='pTeam') p.team=t.value; else if(t.id==='pMemo') p.memo=t.value;
   else if(t.id==='sq'){ SQ=t.value; drawSearch(); return; }
+  else if(t.dataset.bks&&BKSEL){ const I=selInfo(d,BKSEL), arr=(t.dataset.bks==='A'?I.arrA:I.arrB)(true); if(!arr) return;
+    arr[+t.dataset.j]=parseScore(t.value); save(); drawBk(false); return; }
   else if(t.id==='tTitle'){ S.title=t.value; document.getElementById('ttl').textContent=t.value; }
   else if(t.dataset.div!=null) S.divs[+t.dataset.div].name=t.value;
   else if(t.dataset.pf) d.players[+t.dataset.pi][t.dataset.pf]=t.value;
