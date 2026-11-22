@@ -125,6 +125,9 @@ select.grow,input.grow{flex:1}
 .rnd{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
 .rnd button{border:1px solid var(--link);background:var(--bg);color:var(--link);border-radius:999px;padding:6px 12px;font-weight:700;font-size:.9rem}
 .rnd button[aria-pressed="true"]{background:var(--link);color:#fff}
+.bkbar{border:2px solid var(--link);border-radius:10px;padding:8px 10px;margin:8px 0;font-size:.9rem}
+.bkbar .row{margin-top:6px;gap:6px;flex-wrap:wrap}
+.bkbar .btn{padding:8px 10px;font-size:.85rem}
 .pinfo input{border-radius:0;padding:5px 7px;font-size:15px;background:var(--surface)}
 
 .court{background:var(--mat);padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px 16px}
@@ -359,7 +362,7 @@ function viewScore(){
   h+=`<div class="pnav"><button class="arr" data-a="prev" aria-label="前の選手">&lt;</button>
     <select id="pSel" aria-label="選手">${d.players.map((q,i)=>{const cc=calc({s:viewArr(d,q)},d);return `<option value="${i}" ${i===idx?'selected':''}>選手${i+1}${q.name?'　'+esc(q.name):''}${cc?'　'+f(cc.base):''}</option>`}).join('')}</select>
     <button class="arr" data-a="next" aria-label="次の選手">&gt;</button></div>
-  <div class="pinfo"><input type="text" id="pNo" value="${esc(p.no)}" placeholder="番号" aria-label="番号"><input type="text" id="pName" value="${esc(p.name)}" placeholder="氏名" aria-label="氏名"><input type="text" id="pTeam" value="${esc(p.team)}" placeholder="所属" aria-label="所属"></div>`+rndTabs(d,p);
+  <div class="pinfo"><input type="text" id="pNo" value="${esc(p.no)}" placeholder="番号" aria-label="番号"><input type="text" id="pName" value="${esc(p.name)}" placeholder="氏名" aria-label="氏名"><input type="text" id="pTeam" value="${esc(p.team)}" placeholder="所属" aria-label="所属"></div>`+rndTabs(d,p)+bkBar(d,p,slot);
   const layout=d.judges===7?[1,0,2,3,'M',4,5,'R',6]:d.judges===5?[1,0,2,'B','M','B',3,'R',4]:[1,0,2,'B','M','B','B','R','B'];
   h+=`<div class="court">`+layout.map(x=>{
     if(x==='M') return `<div class="mat" aria-hidden="true"><i></i></div>`;
@@ -590,6 +593,21 @@ function slotStatus(d,p,s){
   const res=m.w==null?(m.tie?'<b>同点</b>（対戦表で勝ちを選んでください）':'結果待ち'):m.w===no?'<b>勝ち</b>（次の回へ進みます）':'負け';
   return `${esc(s.label)}　${esc(vs)}　${res}`;
 }
+/* 対戦表から採点画面へ：押した試合の選手と回を選んで移る */
+let BKFROM=null;
+function openInScore(d,sel,no){
+  const p=pByNo(d,no); if(!p) return false;
+  const s=playerSlots(d,p).find(x=>x.path===sel); if(!s) return false;
+  RND={}; RND[p.id]=s.key; d.pi=d.players.indexOf(p); BKFROM={div:d.id,sel}; S.view='score'; return true;
+}
+function bkBar(d,p,slot){
+  if(!BKFROM||BKFROM.div!==d.id||slot.path!==BKFROM.sel) return '';
+  const I=selInfo(d,BKFROM.sel), no=String(p.no), other=I.single?null:(I.a===no?I.b:I.a);
+  return `<div class="bkbar"><div>対戦表から：<b>${esc(I.title)}</b>${other!=null?`　相手 ${esc(other)} ${esc(pName(d,other))}`:''}</div><div class="row">
+    ${other!=null?'<button class="btn" data-a="bkOpp">相手の選手へ</button><button class="btn" data-a="bkWinP">この選手を勝ちにする</button>':''}
+    ${other!=null&&d.bm&&d.bm[BKFROM.sel]&&d.bm[BKFROM.sel].w?'<button class="btn" data-a="bkWinClr">勝ちの指定を消す</button>':''}
+    <button class="btn" data-a="bkBack">対戦表へ戻る</button></div></div>`;
+}
 function rndTabs(d,p){ const L=playerSlots(d,p); if(L.length<2&&!L[0].label) return ''; const cur=curSlot(d,p);
   return `<div class="rnd" role="group" aria-label="何回戦の点か">${L.map(s=>`<button data-a="rnd" data-k="${esc(s.key)}" aria-pressed="${s.key===cur.key}">${esc(s.label)}</button>`).join('')}</div>`; }
 
@@ -607,7 +625,7 @@ function drawBk(withEd){
   drawBkRes(d);
 }
 function edHtml(d){
-  if(!BKSEL) return `<div class="note">${d.bk.type==='rr'?'下の対戦を押すと':'表の縦の線を押すと'}、その試合の${isKumite(d)?'勝ちを入れられます。':'点を入れられます。点の高い選手が、自動で次へ進みます。'}</div>`;
+  if(!BKSEL) return `<div class="note">${d.bk.type==='rr'?'下の対戦を押すと':'表の縦の線を押すと'}、その試合の${isKumite(d)?'勝ちを入れられます。':'点を入れられます。点の高い選手が、自動で次へ進みます。「採点」のタブにも、同じ試合が出ます。'}</div>`;
   const I=selInfo(d,BKSEL);
   if(I.a==null||(!I.single&&I.b==null)) return `<div class="bked"><b>${esc(I.title)}</b><div class="note">前の試合の結果が、まだ出ていません。</div><button class="btn" data-a="bkClose">閉じる</button></div>`;
   const side=(k,no,arr)=>{ const p=pByNo(d,no);
@@ -770,9 +788,17 @@ document.addEventListener('click',e=>{
   switch(a){
     case 'view': S.view=b.dataset.v; break;
     case 'goP': { RND={}; const i=+b.dataset.i, j=+b.dataset.j; if(!S.divs[i]) return; S.cur=i; S.divs[i].pi=j; S.view='score'; save(); render(); window.scrollTo(0,0); return; }
-    case 'bkPick': BKSEL=b.dataset.s; save(); render(); { const e=document.getElementById('bkEd'); if(e) e.scrollIntoView({block:'start'}); } return;
+    case 'bkPick': { const sel=b.dataset.s;
+      // 形・基本で両方の選手がそろった試合は、採点画面に移る（組手・相手待ちは、対戦表の中の欄で）
+      // 対戦表のまま入力欄を開き、採点画面の側も同じ試合の選手と回を選んでおく（自動では移らない：11/23 CEO）
+      if(!isKumite(d)){ const I=selInfo(d,sel); if(I.a!=null&&(I.single||I.b!=null)) openInScore(d,sel,I.a); S.view='bk'; }
+      BKSEL=sel; save(); render(); } { const e=document.getElementById('bkEd'); if(e) e.scrollIntoView({block:'start'}); } return;
     case 'bkClose': BKSEL=null; break;
     case 'rnd': RND[p.id]=b.dataset.k; break;
+    case 'bkOpp': { if(!BKFROM) return; const I=selInfo(d,BKFROM.sel), other=I.a===String(p.no)?I.b:I.a; if(other==null||!openInScore(d,BKFROM.sel,other)) return; window.scrollTo(0,0); break; }
+    case 'bkWinP': { if(!BKFROM) return; const I=selInfo(d,BKFROM.sel); bmRec(d,BKFROM.sel).w=I.a===String(p.no)?'A':'B'; break; }
+    case 'bkWinClr': { if(!BKFROM) return; const r=d.bm&&d.bm[BKFROM.sel]; if(r) delete r.w; break; }
+    case 'bkBack': BKFROM=null; S.view='bk'; break;
     case 'bkWin': { if(!BKSEL) return; const rec=bmRec(d,BKSEL); if(b.dataset.w) rec.w=b.dataset.w; else delete rec.w; break; }
     case 'judges': d.judges=d.judges===7?5:d.judges===5?3:7; break;
     case 'base': d.base=Math.max(0,Math.min(100,d.base+ +b.dataset.d)); break;
