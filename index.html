@@ -55,6 +55,7 @@ h1{font-family:var(--display);font-size:1.3rem;margin:0;letter-spacing:.04em}
 .scard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}
 .scard h3{margin:0 0 6px;font-size:1.05rem}
 .scard h3 small{font-weight:400;color:var(--muted);margin-left:6px}
+.scard .kana{display:block;font-size:.8rem;font-weight:400;color:var(--muted)}
 .sres,.scard{min-width:0}
 .srow .no{white-space:nowrap;text-align:right}
 .srow{display:grid;grid-template-columns:1fr auto;gap:2px 10px;width:100%;text-align:left;border:0;border-top:1px dashed var(--line);background:transparent;padding:8px 0;color:inherit;font:inherit}
@@ -225,7 +226,7 @@ const KATA=[['平安初段','へいあん しょだん'],['平安二段','へい
 const uid=()=>Math.random().toString(36).slice(2,9);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const f=t=>(t/10).toFixed(1);
-const newP=()=>({id:uid(),no:'',name:'',team:'',memo:'',s:Array(7).fill(null)});
+const newP=()=>({id:uid(),no:'',name:'',kana:'',team:'',memo:'',s:Array(7).fill(null)});
 
 let S, canSave=true;
 try{ const raw=localStorage.getItem(KEY); S=raw?JSON.parse(raw):null; }catch(e){ S=null; canSave=false; }
@@ -282,23 +283,25 @@ function render(){
 /* 選手検索：名前の一部で探し、時間・コート・試合・番号を出す */
 let SQ='';
 function viewSearch(){
-  return `<div class="panel"><h2>選手検索</h2><input type="search" id="sq" class="sq" value="${esc(SQ)}" placeholder="名前の一部（例：北）" aria-label="選手の名前の一部" autocomplete="off">
-    <div class="note">名字・名前のどこか一部を入れてください。行を押すと、その選手の採点の画面に移ります。</div><div id="sres" class="sres"></div></div>`;
+  return `<div class="panel"><h2>選手検索</h2><input type="search" id="sq" class="sq" value="${esc(SQ)}" placeholder="名前の一部（例：北・きた）" aria-label="選手の名前の一部" autocomplete="off">
+    <div class="note">名字・名前のどこか一部を、漢字かひらがなで入れてください。行を押すと、その選手の採点の画面に移ります。</div><div id="sres" class="sres"></div></div>`;
 }
 function drawSearch(){
   const el=document.getElementById('sres'); if(!el) return;
-  const q=SQ.replace(/[\s　]/g,'');
+  const hira=s=>String(s||'').replace(/[\s　]/g,'').replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+  const q=SQ.replace(/[\s　]/g,''), qh=hira(SQ);
   if(!q){ el.innerHTML=''; return; }
   const groups=new Map();
   S.divs.forEach((d,i)=>d.players.forEach((p,j)=>{
-    if(!p.name.replace(/[\s　]/g,'').includes(q)) return;
+    if(!p.name.replace(/[\s　]/g,'').includes(q) && !(p.kana&&hira(p.kana).includes(qh))) return;
     const k=p.name.replace(/[\s　]/g,'')+'|'+(p.team||'');
-    if(!groups.has(k)) groups.set(k,{name:p.name,team:p.team,rows:[]});
+    if(groups.has(k)&&!groups.get(k).kana&&p.kana) groups.get(k).kana=p.kana;
+    if(!groups.has(k)) groups.set(k,{name:p.name,kana:p.kana||'',team:p.team,rows:[]});
     groups.get(k).rows.push({d,i,j,p});
   }));
   if(!groups.size){ el.innerHTML='<div class="note">見つかりませんでした。</div>'; return; }
   const rank=x=>x.d.sched?(x.d.sched.part==='午前'?0:1)*1000+x.d.sched.order*10+x.d.sched.court/10:9999;
-  el.innerHTML=[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(g=>`<div class="scard"><h3>${esc(g.name)}<small>${esc(g.team||'')}</small></h3>`+
+  el.innerHTML=[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(g=>`<div class="scard"><h3>${esc(g.name)}<small>${esc(g.team||'')}</small>${g.kana?`<span class="kana">${esc(g.kana)}</span>`:''}</h3>`+
     g.rows.sort((a,b)=>rank(a)-rank(b)).map(x=>{ const s=x.d.sched;
       const when=s?`${s.part} ${s.start}〜・${s.court}コート・${s.order}番目の試合`:'時間・コートは未登録';
       return `<button class="srow" data-a="goP" data-i="${x.i}" data-j="${x.j}"><span class="when">${esc(when)}</span><span class="no">番号 <b>${esc(x.p.no)}</b></span><span class="div">${esc(x.d.name)}</span></button>`; }).join('')+`</div>`).join('');
@@ -468,7 +471,7 @@ function readPasted(src){
   if(a<0||b<a) return null;
   try{ const o=JSON.parse(t.slice(a,b+1)); if(!o||!Array.isArray(o.divs)) return null;
     o.divs.forEach(d=>{ d.id=d.id||uid(); d.name=String(d.name||''); d.judges=[3,5,7].includes(d.judges)?d.judges:7; d.base=typeof d.base==='number'?d.base:70; d.pi=0;
-      d.players=(d.players||[]).map(p=>({id:p.id||uid(),no:String(p.no||''),name:String(p.name||''),team:String(p.team||''),memo:String(p.memo||''),
+      d.players=(d.players||[]).map(p=>({id:p.id||uid(),no:String(p.no||''),name:String(p.name||''),kana:String(p.kana||''),team:String(p.team||''),memo:String(p.memo||''),
         s:Array.from({length:7},(_,j)=>typeof (p.s||[])[j]==='number'?p.s[j]:null)})); });
     return o; }catch(e){ return null; }
 }
@@ -484,6 +487,7 @@ function mergeIn(o){
       let ch=false, df=false;
       for(let j=0;j<7;j++) if(ip.s[j]!=null&&ip.s[j]!==lp.s[j]){ if(lp.s[j]!=null) df=true; lp.s[j]=ip.s[j]; ch=true; }
       if(!lp.team&&ip.team) lp.team=ip.team;
+      if(!lp.kana&&ip.kana) lp.kana=ip.kana;
       if(!lp.memo&&ip.memo) lp.memo=ip.memo;
       if(ch) r.upd++; if(df) r.diff++;
     });
