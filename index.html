@@ -122,6 +122,9 @@ select.grow,input.grow{flex:1}
 .pnav .arr{border:0;background:transparent;color:var(--blue);font-size:1.7rem;font-weight:900;padding:0 8px;line-height:1}
 .pnav select{background:#e8e8e8;border:0;border-radius:0;color:var(--link);font-size:1.05rem;padding:6px 8px;max-width:70%}
 .pinfo{display:grid;grid-template-columns:4.5em 1fr 1fr;gap:4px}
+.rnd{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
+.rnd button{border:1px solid var(--link);background:var(--bg);color:var(--link);border-radius:999px;padding:6px 12px;font-weight:700;font-size:.9rem}
+.rnd button[aria-pressed="true"]{background:var(--link);color:#fff}
 .pinfo input{border-radius:0;padding:5px 7px;font-size:15px;background:var(--surface)}
 
 .court{background:var(--mat);padding:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px 16px}
@@ -285,7 +288,11 @@ function calc(p,d){
 const keys=c=>S.tie==='min'?[c.base,c.plusMin,c.total]:[c.base,c.baseMax,c.total];
 function cmp(a,b){const x=keys(a.c),y=keys(b.c);for(let i=0;i<3;i++){if(x[i]!==y[i])return y[i]-x[i];}return 0;}
 function ranked(d){
-  const rows=d.players.map((p,i)=>({p,i,c:calc(p,d)}));
+  // 決勝のある試合（対戦表の box）は、決勝に進んだ選手の決勝の点で順位を出す
+  const rows=d.bk&&d.bk.type==='box'&&!isKumite(d)
+    ? finalists(d).filter(x=>x.no!=null).map(x=>{ const p=pByNo(d,x.no), s=slotArr(d,d.bk.entries[x.k],'F'+x.k,'a',x.no,false)||Array(7).fill(null);
+        return {p:Object.assign({},p,{s}),i:d.players.indexOf(p),c:calc({s},d)}; })
+    : d.players.map((p,i)=>({p,i,c:calc(p,d)}));
   const done=rows.filter(r=>r.c).sort(cmp), todo=rows.filter(r=>!r.c);
   const second=S.tie==='min'?'＋最低点':'＋最高点', third=S.tie==='min'?'＋最高点':'＋最低点';
   done.forEach((r,i)=>{
@@ -348,18 +355,18 @@ function viewScore(){
     <div class="sc-set"><button class="gbox" data-a="judges" aria-label="審判の人数を切り替える">${d.judges}人審判</button>
       <span class="bl">基準点<button class="gbox" data-a="pad" data-j="base" aria-label="基準点を変える">${f(d.base)}</button></span></div>`;
   if(!p) return h+`<p>この区分には選手がいません。</p><div class="row"><button class="btn primary" data-a="addPlayer">選手を1人追加</button><button class="btn" data-a="view" data-v="setup">まとめて登録する</button></div></div>`;
-  const c=calc(p,d), idx=d.players.indexOf(p);
+  const A=viewArr(d,p), slot=curSlot(d,p), c=calc({s:A},d), idx=d.players.indexOf(p);
   h+=`<div class="pnav"><button class="arr" data-a="prev" aria-label="前の選手">&lt;</button>
-    <select id="pSel" aria-label="選手">${d.players.map((q,i)=>{const cc=calc(q,d);return `<option value="${i}" ${i===idx?'selected':''}>選手${i+1}${q.name?'　'+esc(q.name):''}${cc?'　'+f(cc.base):''}</option>`}).join('')}</select>
+    <select id="pSel" aria-label="選手">${d.players.map((q,i)=>{const cc=calc({s:viewArr(d,q)},d);return `<option value="${i}" ${i===idx?'selected':''}>選手${i+1}${q.name?'　'+esc(q.name):''}${cc?'　'+f(cc.base):''}</option>`}).join('')}</select>
     <button class="arr" data-a="next" aria-label="次の選手">&gt;</button></div>
-  <div class="pinfo"><input type="text" id="pNo" value="${esc(p.no)}" placeholder="番号" aria-label="番号"><input type="text" id="pName" value="${esc(p.name)}" placeholder="氏名" aria-label="氏名"><input type="text" id="pTeam" value="${esc(p.team)}" placeholder="所属" aria-label="所属"></div>`;
+  <div class="pinfo"><input type="text" id="pNo" value="${esc(p.no)}" placeholder="番号" aria-label="番号"><input type="text" id="pName" value="${esc(p.name)}" placeholder="氏名" aria-label="氏名"><input type="text" id="pTeam" value="${esc(p.team)}" placeholder="所属" aria-label="所属"></div>`+rndTabs(d,p);
   const layout=d.judges===7?[1,0,2,3,'M',4,5,'R',6]:d.judges===5?[1,0,2,'B','M','B',3,'R',4]:[1,0,2,'B','M','B','B','R','B'];
   h+=`<div class="court">`+layout.map(x=>{
     if(x==='M') return `<div class="mat" aria-hidden="true"><i></i></div>`;
     if(x==='R') return `<div class="mid"><button class="pill" data-a="reset" id="resetBtn">リセット</button></div>`;
     if(x==='B') return `<div></div>`;
     // 同じ点が並んだときは、その全員に印を付ける（全員が同じ点なら印なし）
-    const v=p.s[x], spread=c&&c.mn!==c.mx, dm=spread&&v===c.mn, dx=spread&&v===c.mx;
+    const v=A[x], spread=c&&c.mn!==c.mx, dm=spread&&v===c.mn, dx=spread&&v===c.mx;
     return `<div class="judge ${dm?'dmin':''} ${dx?'dmax':''}">
       <button class="jscore ${v==null?'empty':''}" data-a="pad" data-j="${x}" aria-label="${J_NAMES[x]}の点${dm?'（最低点）':dx?'（最高点）':''}">${v==null?(x===0?'主審':'副審'):f(v)}</button>
       <div class="pm"><button class="minus" data-a="adj" data-j="${x}" data-d="-1" aria-label="${J_NAMES[x]} 0.1下げる">-</button><button class="plus" data-a="adj" data-j="${x}" data-d="1" aria-label="${J_NAMES[x]} 0.1上げる">+</button></div></div>`;
@@ -369,9 +376,10 @@ function viewScore(){
     <div class="v main">${c?f(c.base):''}</div>
     <button class="loupe" data-a="big" aria-label="得点を拡大表示"><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="#cfe6ff" stroke="#3a6fb0" stroke-width="3"/><line x1="20" y1="20" x2="29" y2="29" stroke="#333" stroke-width="5" stroke-linecap="round"/></svg></button>
     <div class="v">${c?f(c.plusMin):''}</div><div class="v">${c?f(c.plusMax):''}</div></div>`;
-  const filled=p.s.slice(0,d.judges).filter(v=>v!=null).length;
-  if(c){ const rk=ranked(d), r=rk.done.find(x=>x.p===p);
-    h+=`<div class="status">この区分で <b class="num">${r.rank}位</b>（採点済み ${rk.done.length}人中）${r.note?`<span class="chip w">${r.note}</span>`:''}</div>`;
+  const filled=A.slice(0,d.judges).filter(v=>v!=null).length, sst=c?slotStatus(d,p,slot):'';
+  if(sst) h+=`<div class="status">${sst}</div>`;
+  else if(c){ const rk=ranked(d), r=rk.done.find(x=>x.p.id===p.id);
+    h+=r?`<div class="status">この区分で <b class="num">${r.rank}位</b>（採点済み ${rk.done.length}人中）${r.note?`<span class="chip w">${r.note}</span>`:''}</div>`:'';
   } else h+=`<div class="status">あと <b class="num">${d.judges-filled}人</b> の点を入れると得点が出ます　<button class="pill" data-a="fill">残りを基準点に</button></div>`;
   h+=`<button class="next-big" data-a="nextOrAdd">${idx<d.players.length-1?'次の選手へ ＞':'選手を追加して次へ ＞'}</button></div>`;
   return h;
@@ -383,7 +391,7 @@ function viewRank(){
   const tieTxt=S.tie==='min'?'＋最低点 → ＋最高点':'＋最高点 → ＋最低点';
   const scores=(p,c)=>p.s.slice(0,n).map((v,j)=>`<td class="num">${v==null?'—':(c&&(c.minIdx===j||c.maxIdx===j)?`<span class="x">${f(v)}</span>`:f(v))}</td>`).join('');
   let h=`<div class="panel"><div class="row"><span class="lbl">区分</span>${divSelect('divSel')}</div>
-  <div class="note">${n}人審判。最高点と最低点（線を引いた点）を除いた合計が得点です。同点のときは ${tieTxt} の順で比べています。</div></div>
+  <div class="note">${n}人審判。最高点と最低点（線を引いた点）を除いた合計が得点です。同点のときは ${tieTxt} の順で比べています。${d.bk&&d.bk.type==='box'?'<br>この試合は、決勝に進んだ選手の<b>決勝の点</b>で順位を出しています。':d.bk&&!isKumite(d)?'<br>この表は、各選手の<b>最初の演武の点</b>です。勝ち上がりは「対戦表」で見られます。':''}</div></div>
   <div class="tbl-wrap"><table><thead><tr><th>順位</th><th>番号</th><th>氏名</th><th>所属</th>${J_NAMES.slice(0,n).map(x=>`<th>${x}</th>`).join('')}<th>得点</th><th>＋最低点</th><th>＋最高点</th><th>メモ</th></tr></thead><tbody>`;
   done.forEach(r=>{ h+=`<tr><td class="rank">${r.rank}</td><td class="num">${esc(r.p.no)}</td><td class="l">${esc(r.p.name)}${r.note?`<span class="chip ${r.note==='完全に同点'?'w':'g'}">${r.note}</span>`:''}</td><td class="l">${esc(r.p.team)}</td>${scores(r.p,r.c)}<td class="big">${f(r.c.base)}</td><td class="num">${f(r.c.plusMin)}</td><td class="num">${f(r.c.plusMax)}</td><td class="l">${esc(r.p.memo)}</td></tr>`; });
   todo.forEach(r=>{ h+=`<tr class="todo"><td>未</td><td class="num">${esc(r.p.no)}</td><td class="l">${esc(r.p.name)}</td><td class="l">${esc(r.p.team)}</td>${scores(r.p,null)}<td>—</td><td>—</td><td>—</td><td class="l">${esc(r.p.memo)}</td></tr>`; });
@@ -488,10 +496,10 @@ function viewKata(){
 /* 拡大表示 */
 const BIG=document.getElementById('big');
 function openBig(){
-  const d=div(), p=player(d); if(!p) return; const c=calc(p,d);
+  const d=div(), p=player(d); if(!p) return; const A=viewArr(d,p), c=calc({s:A},d);
   BIG.innerHTML=`<div class="who">${esc(p.no)} ${esc(p.name)}</div><div class="k">得点</div><div class="v">${c?f(c.base):'—'}</div>
     <div class="sub"><span>＋最低点 <b>${c?f(c.plusMin):'—'}</b></span><span>＋最高点 <b>${c?f(c.plusMax):'—'}</b></span></div>
-    <div class="js">${p.s.slice(0,d.judges).map((v,j)=>`<span class="${c&&(c.minIdx===j||c.maxIdx===j)?'x':''}">${v==null?'—':f(v)}</span>`).join('')}</div>
+    <div class="js">${A.slice(0,d.judges).map((v,j)=>`<span class="${c&&(c.minIdx===j||c.maxIdx===j)?'x':''}">${v==null?'—':f(v)}</span>`).join('')}</div>
     <div class="note">画面を押すと戻ります</div>`;
   BIG.hidden=false;
 }
@@ -540,6 +548,50 @@ function selInfo(d,sel){
   return {title:roundName(d,n,sel), path:sel, a, b, arrA:c=>slotArr(d,n[0],sel,'a',a,c), arrB:c=>slotArr(d,n[1],sel,'b',b,c)};
 }
 function finalists(d){ return d.bk.entries.map((e,k)=>{ const no=bkRes(d,e,'E'+k); return {k,no,c:no!=null?calcS(slotArr(d,e,'F'+k,'a',no,false),d):null}; }); }
+
+/* 採点画面と対戦表をつなぐ：選手ごとの演武（何回戦の点か）の一覧。採点画面はここで選んだ回の点を読み書きする */
+let RND={};
+function findAnc(n,path,no,acc){ if(!Array.isArray(n)) return String(n)===no?acc:null;
+  for(const k of [0,1]){ const r=findAnc(n[k],path+k,no,acc.concat([{n,path,side:k}])); if(r) return r; } return null; }
+function playerSlots(d,p){
+  const no=String(p.no), P={key:'P',label:'',arr:()=>p.s}, bk=d.bk;
+  if(!bk||isKumite(d)) return [P];
+  if(bk.type==='rr'){ const out=[], i=d.players.indexOf(p);
+    d.players.forEach((q,j)=>{ if(j===i) return; const a=Math.min(i,j), b=Math.max(i,j), path='R'+a+'-'+b, k=i<j?'a':'b';
+      out.push({key:path+'|'+k,label:'対 '+q.no+' '+q.name,path,arr:c=>recArr(d,path,k,no,c)}); });
+    return out.length?out:[P]; }
+  const roots=bk.type==='box'?bk.entries.map((n,k)=>[n,'E'+k,k]):[[bk.tree,'T',-1]];
+  for(const [n,rp,k] of roots){
+    if(!Array.isArray(n)){ if(String(n)===no) return [Object.assign(P,{label:'決勝',path:'F'+k})]; continue; }
+    const anc=findAnc(n,rp,no,[]); if(!anc) continue;
+    const out=[]; let prev=null;
+    for(let i=anc.length-1;i>=0;i--){ const a=anc[i];
+      if(prev&&nodeMatch(d,prev.n,prev.path).w!==no) break;
+      if(!prev) out.push(Object.assign(P,{label:roundName(d,a.n,a.path),path:a.path}));
+      else { const kk=a.side?'b':'a'; out.push({key:a.path+'|'+kk,label:roundName(d,a.n,a.path),path:a.path,arr:c=>recArr(d,a.path,kk,no,c)}); }
+      prev=a; }
+    if(k>=0&&prev&&nodeMatch(d,prev.n,prev.path).w===no) out.push({key:'F'+k,label:'決勝',path:'F'+k,arr:c=>recArr(d,'F'+k,'a',no,c)});
+    return out;
+  }
+  return [P];
+}
+function curSlot(d,p){ const L=playerSlots(d,p), s=L.find(x=>x.key===RND[p.id]); if(s) return s;
+  if(d.bk&&d.bk.type==='rr') return L.find(x=>{ const a=x.arr(false); return !a||a.slice(0,d.judges).some(v=>v==null); })||L[L.length-1];
+  return L[L.length-1]; }
+const viewArr=(d,p)=>curSlot(d,p).arr(false)||Array(7).fill(null);   // 見るだけ（記録は作らない）
+const writeArr=(d,p)=>{ const s=curSlot(d,p); RND[p.id]=s.key; return s.arr(true)||p.s; };  // 書くとき（入れた回は、その選手を表示している間そのまま）
+function slotStatus(d,p,s){
+  if(!s.path) return '';
+  const no=String(p.no);
+  if(s.path[0]==='F'){ const done=finalists(d).filter(x=>x.c).sort(cmp), i=done.findIndex(x=>x.no===no); if(i<0) return '';
+    let r=i; while(r>0&&cmp(done[r-1],done[i])===0) r--; return `決勝で <b class="num">${r+1}位</b>（採点済み ${done.length}人中）`; }
+  const I=selInfo(d,s.path), m=decide(d,s.path,I.a,I.b,I.arrA(false),I.arrB(false)), other=I.a===no?I.b:I.a;
+  const vs=other!=null?`相手 ${other} ${pName(d,other)}`:'相手は前の試合の結果待ち';
+  const res=m.w==null?(m.tie?'<b>同点</b>（対戦表で勝ちを選んでください）':'結果待ち'):m.w===no?'<b>勝ち</b>（次の回へ進みます）':'負け';
+  return `${esc(s.label)}　${esc(vs)}　${res}`;
+}
+function rndTabs(d,p){ const L=playerSlots(d,p); if(L.length<2&&!L[0].label) return ''; const cur=curSlot(d,p);
+  return `<div class="rnd" role="group" aria-label="何回戦の点か">${L.map(s=>`<button data-a="rnd" data-k="${esc(s.key)}" aria-pressed="${s.key===cur.key}">${esc(s.label)}</button>`).join('')}</div>`; }
 
 function viewBk(){
   const d=div(); if(!d) return '<div class="panel"><p>区分がまだありません。</p></div>';
@@ -688,7 +740,7 @@ function parsePad(b){
 }
 function openPad(j){ padJ=j; padBuf=''; drawPad(); PAD.hidden=false; }
 function drawPad(){
-  const d=div(), p=player(d), v=parsePad(padBuf), isBase=padJ==='base', cur=isBase?d.base:p.s[padJ];
+  const d=div(), p=player(d), v=parsePad(padBuf), isBase=padJ==='base', cur=isBase?d.base:viewArr(d,p)[padJ];
   const who=isBase?'基準点':J_NAMES[padJ]+'（'+esc(p.name)+'）';
   const shown=padBuf===''?(cur==null?'—':f(cur)):(Number.isNaN(v)?'0.0〜10.0で入れてください':f(v));
   PAD.innerHTML=`<div class="pad-card" role="dialog" aria-label="${isBase?'基準点':J_NAMES[padJ]+'の点'}を入力">
@@ -701,7 +753,7 @@ function drawPad(){
 function padOk(){
   const d=div(), p=player(d), v=parsePad(padBuf);
   if(padJ==='base'){ if(padBuf!==''){ if(Number.isNaN(v)){ drawPad(); return; } d.base=v; save(); } PAD.hidden=true; render(); return; }
-  if(padBuf!==''){ if(Number.isNaN(v)){ drawPad(); return; } p.s[padJ]=v; save(); }
+  if(padBuf!==''){ if(Number.isNaN(v)){ drawPad(); return; } writeArr(d,p)[padJ]=v; save(); }
   if(padJ<d.judges-1){ padJ++; padBuf=''; render(); drawPad(); } else { PAD.hidden=true; render(); }
 }
 
@@ -717,27 +769,28 @@ document.addEventListener('click',e=>{
   const a=b.dataset.a, d=div(), p=player(d);
   switch(a){
     case 'view': S.view=b.dataset.v; break;
-    case 'goP': { const i=+b.dataset.i, j=+b.dataset.j; if(!S.divs[i]) return; S.cur=i; S.divs[i].pi=j; S.view='score'; save(); render(); window.scrollTo(0,0); return; }
+    case 'goP': { RND={}; const i=+b.dataset.i, j=+b.dataset.j; if(!S.divs[i]) return; S.cur=i; S.divs[i].pi=j; S.view='score'; save(); render(); window.scrollTo(0,0); return; }
     case 'bkPick': BKSEL=b.dataset.s; save(); render(); { const e=document.getElementById('bkEd'); if(e) e.scrollIntoView({block:'start'}); } return;
     case 'bkClose': BKSEL=null; break;
+    case 'rnd': RND[p.id]=b.dataset.k; break;
     case 'bkWin': { if(!BKSEL) return; const rec=bmRec(d,BKSEL); if(b.dataset.w) rec.w=b.dataset.w; else delete rec.w; break; }
     case 'judges': d.judges=d.judges===7?5:d.judges===5?3:7; break;
     case 'base': d.base=Math.max(0,Math.min(100,d.base+ +b.dataset.d)); break;
-    case 'prev': d.pi=Math.max(0,(d.pi||0)-1); break;
-    case 'next': d.pi=Math.min(d.players.length-1,(d.pi||0)+1); break;
-    case 'nextOrAdd':
+    case 'prev': RND={}; d.pi=Math.max(0,(d.pi||0)-1); break;
+    case 'next': RND={}; d.pi=Math.min(d.players.length-1,(d.pi||0)+1); break;
+    case 'nextOrAdd': RND={};
       if((d.pi||0)<d.players.length-1) d.pi++;
       else { d.players.push(newP()); d.pi=d.players.length-1; }
       window.scrollTo({top:0}); break;
     case 'addPlayer': d.players.push(newP()); d.pi=d.players.length-1; break;
-    case 'adj': { const j=+b.dataset.j, cur=p.s[j]==null?d.base:p.s[j]; p.s[j]=Math.max(0,Math.min(100,cur+ +b.dataset.d)); break; }
+    case 'adj': { const W=writeArr(d,p), j=+b.dataset.j, cur=W[j]==null?d.base:W[j]; W[j]=Math.max(0,Math.min(100,cur+ +b.dataset.d)); break; }
     case 'pad': openPad(b.dataset.j==='base'?'base':+b.dataset.j); return;
     case 'padClose': PAD.hidden=true; render(); return;
     case 'k': { const k=b.dataset.k; if(k==='消') padBuf=padBuf.slice(0,-1); else if(padBuf.length<4) padBuf+=k; drawPad(); return; }
     case 'padOk': padOk(); return;
     case 'big': openBig(); return;
-    case 'fill': for(let j=0;j<d.judges;j++) if(p.s[j]==null) p.s[j]=d.base; break;
-    case 'reset': if(!confirm2('resetBtn','もう一度押すと消します')) return; p.s=Array(7).fill(null); break;
+    case 'fill': { const W=writeArr(d,p); for(let j=0;j<d.judges;j++) if(W[j]==null) W[j]=d.base; break; }
+    case 'reset': if(!confirm2('resetBtn','もう一度押すと消します')) return; writeArr(d,p).fill(null); break;
     case 'pickDiv': S.cur=+b.dataset.i; break;
     case 'addDiv': { const el=document.getElementById('newDiv'), n=el.value.trim()||('区分'+(S.divs.length+1));
       S.divs.push({id:uid(),name:n,judges:d?d.judges:7,base:d?d.base:70,pi:0,players:[]}); S.cur=S.divs.length-1; break; }
@@ -782,8 +835,8 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{
   const t=e.target, d=div();
-  if(t.id==='divSel'){ S.cur=+t.value; save(); render(); }
-  else if(t.id==='pSel'){ d.pi=+t.value; save(); render(); }
+  if(t.id==='divSel'){ RND={}; S.cur=+t.value; save(); render(); }
+  else if(t.id==='pSel'){ RND={}; d.pi=+t.value; save(); render(); }
   else if(t.name==='tie'){ S.tie=t.value; save(); }
   else if(t.id==='fileIn'&&t.files&&t.files[0]){ const fr=new FileReader(), msg=document.getElementById('mergeMsg');
     fr.onload=()=>{ document.getElementById('restore').value=String(fr.result||''); msg.textContent='ファイルを読み込みました。初めて入れるときは「置き換える」、今のデータに足すときは「取り込む」を押してください。'; };
