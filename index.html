@@ -347,10 +347,10 @@ function drawSearch(){
     groups.get(k).rows.push({d,i,j,p});
   }));
   if(!groups.size){ el.innerHTML='<div class="note">見つかりませんでした。</div>'; return; }
-  const rank=x=>x.d.sched?(x.d.sched.part==='午前'?0:1)*1000+x.d.sched.order*10+x.d.sched.court/10:9999;
+  const rank=x=>x.d.sched?(x.d.sched.part==='午前'?0:x.d.sched.part?1:2)*1000+(x.d.sched.order||0)*10+x.d.sched.court/10:9999;
   el.innerHTML=[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(g=>`<div class="scard"><h3>${esc(g.name)}<small>${esc(g.team||'')}</small>${g.kana?`<span class="kana">${esc(g.kana)}</span>`:''}</h3>`+
     g.rows.sort((a,b)=>rank(a)-rank(b)).map(x=>{ const s=x.d.sched;
-      const when=s?`${s.part} ${s.start}〜・${s.court}コート・${s.order}番目の試合`:'時間・コートは未登録';
+      const when=!s?'時間・コートは未登録':s.part?`${s.part} ${s.start}〜・${s.court}コート・${s.order}番目の試合`:`${s.court}コート（時間・順番は未登録）`;
       return `<button class="srow" data-a="goP" data-i="${x.i}" data-j="${x.j}"><span class="when">${esc(when)}</span><span class="no">番号 <b>${esc(x.p.no)}</b></span><span class="div">${esc(x.d.name)}</span></button>`; }).join('')+`</div>`).join('');
 }
 function divSelect(id){
